@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多機能ビデオプレイヤー</title>
+    <style>
+        :root {
+            --primary-color: #00aaff;
+            --bg-color: #1a1a1a;
+            --controls-bg-color: rgba(26, 26, 26, 0.85);
+            --text-color: #ffffff;
+            --icon-color: #ffffff;
+            --slider-track-color: #4d4d4d;
+            --slider-thumb-color: #ffffff;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            font-family: 'Inter', 'Helvetica Neue', 'Arial', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'BIZ UDPGothic', sans-serif;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #player-container {
+            width: 90vw;
+            max-width: 1200px;
+            aspect-ratio: 16 / 9;
+            position: relative;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            border-radius: 12px;
+        }
+        
+        #video-placeholder {
+            text-align: center;
+            padding: 2rem;
+            border: 3px dashed var(--slider-track-color);
+            border-radius: 12px;
+            color: var(--slider-track-color);
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #video-placeholder p {
+            margin: 0;
+        }
+        
+        .top-left-button {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 20;
+            background-color: rgba(26, 26, 26, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .top-left-button svg {
+            width: 22px;
+            height: 22px;
+            fill: var(--icon-color);
+        }
+
+        .top-left-button:hover {
+            background-color: rgba(26, 26, 26, 0.8);
+        }
+
+        #player-container:hover .top-left-button,
+        #player-container.controls-active .top-left-button {
+            opacity: 1;
+            visibility: visible;
+        }
+
+
+        #controls-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 10px 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0));
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+            transform: translateY(10px);
+            cursor: default;
+        }
+
+        #player-container:hover #controls-container,
+        #player-container.controls-active #controls-container {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        
+        /* コントロール非表示状態 */
+        #player-container.controls-hidden #controls-container {
+            transform: translateY(100%);
+            opacity: 0;
+            visibility: hidden;
+        }
+        
+        #show-controls-tab {
+            position: absolute;
+            bottom: -50px; /* 初期状態では隠す */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--controls-bg-color);
+            color: var(--text-color);
+            padding: 8px 16px;
+            border-radius: 10px 10px 0 0;
+            cursor: pointer;
+            transition: bottom 0.3s ease;
+            font-size: 0.9rem;
+            z-index: 10;
+        }
+
+        #player-container.controls-hidden #show-controls-tab {
+            bottom: 0;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background-color: var(--slider-track-color);
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        #progress-bar {
+            width: 0;
+            height: 100%;
+            background-color: var(--primary-color);
+            border-radius: 4px;
+        }
+        
+        #buffered-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            z-index: -1;
+        }
+
+        .controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .controls-left, .controls-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .control-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-button svg {
+            width: 24px;
+            height: 24px;
+            fill: var(--icon-color);
+            transition: transform 0.2s ease;
+        }
+
+        .control-button:hover svg {
+            fill: var(--primary-color);
+            transform: scale(1.1);
+        }
+
+        .time-display, .playback-speed-display {
+            font-size: 0.9em;
+            user-select: none;
+        }
+
+        .volume-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #volume-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 80px;
+            height: 5px;
+            background: var(--slider-track-color);
+            outline: none;
+            border-radius: 3px;
+            transition: opacity 0.2s;
+            cursor: pointer;
+        }
+        
+        #volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 15px;
+            height: 15px;
+            background: var(--slider-thumb-color);
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        #volume-slider::-moz-range-thumb {
+            width: 15px;
+            height: 15px;
+            background: var(--slider-thumb-color);
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
+
+        #playback-speed-selector {
+            background-color: var(--controls-bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--slider-track-color);
+            border-radius: 5px;
+            padding: 4px;
+        }
+
+        .drag-over {
+            border: 3px dashed var(--primary-color) !important;
+            background-color: rgba(0, 170, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="player-container">
+        <input type="file" id="file-input" accept="video/*" style="display: none;">
+        <button id="open-file-btn" class="top-left-button" title="ファイルを開く">
+            <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10z"/></svg>
+        </button>
+        <video id="video" preload="none"></video>
+        <div id="video-placeholder">
+            <p>ここに動画ファイルをドラッグ＆ドロップするか<br>左上のボタンからファイルを開いてください</p>
+        </div>
+
+        <div id="controls-container">
+            <!-- プログレスバー -->
+            <div class="progress-bar-container" id="progress-bar-container">
+                <div id="buffered-bar"></div>
+                <div id="progress-bar"></div>
+            </div>
+
+            <!-- コントロールボタン -->
+            <div class="controls-row">
+                <div class="controls-left">
+                    <button class="control-button" id="play-pause-btn" title="再生/一時停止 (Space)">
+                        <svg id="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
+                        <svg id="pause-icon" viewBox="0 0 24 24" style="display: none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+                    </button>
+                    <button class="control-button" id="stop-btn" title="停止">
+                        <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"></path></svg>
+                    </button>
+                    <div class="volume-container">
+                        <button class="control-button" id="mute-btn" title="ミュート/ミュート解除">
+                            <svg id="volume-high-icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"></path></svg>
+                            <svg id="volume-off-icon" viewBox="0 0 24 24" style="display: none;"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"></path></svg>
+                        </button>
+                        <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="1" title="音量">
+                    </div>
+                    <span class="time-display" id="time-display">00:00 / 00:00</span>
+                </div>
+                <div class="controls-right">
+                    <button class="control-button" id="snapshot-btn" title="スナップショット">
+                        <svg viewBox="0 0 24 24"><path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h4.05l1.83-2h4.24l1.83 2H20v12zM12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/></svg>
+                    </button>
+                    <select id="playback-speed-selector" title="再生速度">
+                        <option value="0.5">0.5x</option>
+                        <option value="0.75">0.75x</option>
+                        <option value="1" selected>1.0x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2.0x</option>
+                    </select>
+                    <button class="control-button" id="hide-controls-btn" title="コントロールを隠す">
+                         <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"></path></svg>
+                    </button>
+                    <button class="control-button" id="fullscreen-btn" title="フルスクリーン">
+                        <svg id="fullscreen-open-icon" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"></path></svg>
+                        <svg id="fullscreen-exit-icon" viewBox="0 0 24 24" style="display: none;"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="show-controls-tab">コントロールを表示</div>
+    </div>
+    <canvas id="snapshot-canvas" style="display: none;"></canvas>
+
+    <script>
+        // DOM要素の取得
+        const playerContainer = document.getElementById('player-container');
+        const video = document.getElementById('video');
+        const videoPlaceholder = document.getElementById('video-placeholder');
+        const controlsContainer = document.getElementById('controls-container');
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const playIcon = document.getElementById('play-icon');
+        const pauseIcon = document.getElementById('pause-icon');
+        const stopBtn = document.getElementById('stop-btn');
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
+        const bufferedBar = document.getElementById('buffered-bar');
+        const timeDisplay = document.getElementById('time-display');
+        const muteBtn = document.getElementById('mute-btn');
+        const volumeHighIcon = document.getElementById('volume-high-icon');
+        const volumeOffIcon = document.getElementById('volume-off-icon');
+        const volumeSlider = document.getElementById('volume-slider');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const fullscreenOpenIcon = document.getElementById('fullscreen-open-icon');
+        const fullscreenExitIcon = document.getElementById('fullscreen-exit-icon');
+        const playbackSpeedSelector = document.getElementById('playback-speed-selector');
+        const hideControlsBtn = document.getElementById('hide-controls-btn');
+        const showControlsTab = document.getElementById('show-controls-tab');
+        const openFileBtn = document.getElementById('open-file-btn');
+        const fileInput = document.getElementById('file-input');
+        const snapshotBtn = document.getElementById('snapshot-btn');
+        const snapshotCanvas = document.getElementById('snapshot-canvas');
+
+        let controlsTimeout;
+        let isSeeking = false;
+        
+        // --- 初期化 ---
+        function initializePlayer() {
+            videoPlaceholder.style.display = 'flex';
+            video.style.display = 'none';
+        }
+
+        // --- エラー表示 ---
+        function showErrorInPlaceholder(message) {
+            video.style.display = 'none';
+            video.src = ""; // ソースをクリア
+            videoPlaceholder.style.display = 'flex';
+            videoPlaceholder.querySelector('p').innerHTML = message;
+        }
+
+        // --- 動画読み込み関連 ---
+        function loadVideo(file) {
+            // 新しいファイルをロードする前にプレースホルダーをリセット
+            videoPlaceholder.querySelector('p').innerHTML = 'ここに動画ファイルをドラッグ＆ドロップするか<br>左上のボタンからファイルを開いてください';
+            const fileURL = URL.createObjectURL(file);
+            video.src = fileURL;
+            videoPlaceholder.style.display = 'none';
+            video.style.display = 'block';
+            
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.error("ビデオの再生に失敗しました:", error);
+                    showErrorInPlaceholder('エラー: このビデオは再生できません。');
+                });
+            }
+        }
+
+        // --- コントロールの表示/非表示 ---
+        function showControls() {
+            playerContainer.classList.add('controls-active');
+            clearTimeout(controlsTimeout);
+            // 動画再生中のみ、数秒後にコントロールを自動で隠す
+            if (!video.paused) {
+                hideControlsLater();
+            }
+        }
+
+        function hideControls() {
+            // シークバーをドラッグ中は隠さない
+            if (isSeeking) return;
+            playerContainer.classList.remove('controls-active');
+        }
+        
+        function hideControlsLater() {
+            controlsTimeout = setTimeout(hideControls, 3000);
+        }
+
+        // --- 再生/停止コントロール ---
+        function togglePlayPause() {
+            if (video.src && video.readyState >= 3) { // readyStateをチェックして再生可能か確認
+                if (video.paused) {
+                    video.play();
+                } else {
+                    video.pause();
+                }
+            }
+        }
+
+        function updatePlayPauseIcon() {
+            if (video.paused) {
+                playIcon.style.display = 'block';
+                pauseIcon.style.display = 'none';
+                // 一時停止したらコントロールを表示し続ける
+                clearTimeout(controlsTimeout);
+                playerContainer.classList.add('controls-active');
+            } else {
+                playIcon.style.display = 'none';
+                pauseIcon.style.display = 'block';
+                // 再生を開始したら数秒後にコントロールを隠す
+                hideControlsLater();
+            }
+        }
+
+        function stopVideo() {
+            if(video.src) {
+                video.pause();
+                video.currentTime = 0;
+            }
+        }
+
+        // --- プログレスバー/時間表示 ---
+        function updateProgress() {
+            if (!isSeeking && video.duration) {
+                 const progressPercent = (video.currentTime / video.duration) * 100;
+                 progressBar.style.width = `${progressPercent}%`;
+            }
+            updateTimeDisplay();
+        }
+        
+        function updateBuffer() {
+            if (video.duration > 0) {
+                 if (video.buffered.length > 0) {
+                    const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+                    const bufferedPercent = (bufferedEnd / video.duration) * 100;
+                    bufferedBar.style.width = `${bufferedPercent}%`;
+                }
+            }
+        }
+
+        function updateTimeDisplay() {
+            timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
+        }
+
+        function formatTime(timeInSeconds) {
+            const minutes = Math.floor(timeInSeconds / 60);
+            const seconds = Math.floor(timeInSeconds % 60);
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+        
+        function seek(event) {
+            if(video.duration){
+                const rect = progressBarContainer.getBoundingClientRect();
+                const pos = (event.clientX - rect.left) / rect.width;
+                video.currentTime = pos * video.duration;
+            }
+        }
+
+        // --- 音量コントロール ---
+        function toggleMute() {
+            video.muted = !video.muted;
+        }
+
+        function updateVolumeUI() {
+            if (video.muted || video.volume === 0) {
+                volumeHighIcon.style.display = 'none';
+                volumeOffIcon.style.display = 'block';
+                volumeSlider.value = 0;
+            } else {
+                volumeHighIcon.style.display = 'block';
+                volumeOffIcon.style.display = 'none';
+                volumeSlider.value = video.volume;
+            }
+        }
+
+        function handleVolumeChange() {
+            video.volume = volumeSlider.value;
+            if (video.volume > 0) {
+                video.muted = false;
+            }
+        }
+
+        // --- フルスクリーン ---
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                playerContainer.requestFullscreen().catch(err => {
+                    console.error(`フルスクリーンモードにできませんでした: ${err.message} (${err.name})`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function updateFullscreenIcon() {
+            if (document.fullscreenElement) {
+                fullscreenOpenIcon.style.display = 'none';
+                fullscreenExitIcon.style.display = 'block';
+            } else {
+                fullscreenOpenIcon.style.display = 'block';
+                fullscreenExitIcon.style.display = 'none';
+            }
+        }
+
+        // --- 再生速度 ---
+        function changePlaybackSpeed() {
+            video.playbackRate = parseFloat(playbackSpeedSelector.value);
+        }
+
+        // --- スナップショット ---
+        function takeSnapshot() {
+            if (!video.src || video.readyState < 1) {
+                console.log("ビデオがロードされていないため、スナップショットを撮れません。");
+                return;
+            }
+
+            const canvas = snapshotCanvas;
+            const context = canvas.getContext('2d');
+
+            // キャンバスのサイズを動画の元のサイズに設定
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // 現在のフレームをキャンバスに描画
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // ダウンロード用のリンクを作成
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            
+            // タイムスタンプ付きのファイル名を作成
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
+            link.download = `snapshot_${timestamp}.png`;
+            
+            // ダウンロードを実行
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // --- イベントリスナー ---
+        // ファイルを開く
+        openFileBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('video/')) {
+                loadVideo(file);
+            } else if (file) {
+                showErrorInPlaceholder('ビデオファイルを選択してください。');
+            }
+        });
+
+        // 動画
+        video.addEventListener('play', updatePlayPauseIcon);
+        video.addEventListener('pause', updatePlayPauseIcon);
+        video.addEventListener('timeupdate', updateProgress);
+        video.addEventListener('loadedmetadata', updateTimeDisplay);
+        video.addEventListener('volumechange', updateVolumeUI);
+        video.addEventListener('progress', updateBuffer);
+        video.addEventListener('ended', stopVideo);
+        video.addEventListener('click', () => {
+             playerContainer.classList.toggle('controls-hidden');
+        });
+        
+        // 再生/停止/リセット
+        playPauseBtn.addEventListener('click', togglePlayPause);
+        stopBtn.addEventListener('click', stopVideo);
+
+        // スナップショット
+        snapshotBtn.addEventListener('click', takeSnapshot);
+
+        // プログレスバー
+        progressBarContainer.addEventListener('click', seek);
+        progressBarContainer.addEventListener('mousedown', (e) => {
+            isSeeking = true;
+            seek(e);
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (isSeeking) {
+                seek(e);
+            }
+        });
+        document.addEventListener('mouseup', () => {
+            isSeeking = false;
+        });
+
+        // 音量
+        muteBtn.addEventListener('click', toggleMute);
+        volumeSlider.addEventListener('input', handleVolumeChange);
+        
+        // フルスクリーン
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
+
+        // 再生速度
+        playbackSpeedSelector.addEventListener('change', changePlaybackSpeed);
+        
+        // コントロール表示
+        playerContainer.addEventListener('mouseenter', showControls);
+        playerContainer.addEventListener('mousemove', showControls);
+        playerContainer.addEventListener('mouseleave', hideControls);
+
+        // コントロール非表示ボタン
+        hideControlsBtn.addEventListener('click', () => {
+            playerContainer.classList.add('controls-hidden');
+        });
+
+        showControlsTab.addEventListener('click', () => {
+            playerContainer.classList.remove('controls-hidden');
+            showControls();
+        });
+
+        // キーボードショートカット
+        document.addEventListener('keydown', (e) => {
+            // inputやselectがフォーカスされている場合は何もしない
+            const target = e.target;
+            if (target.tagName === 'INPUT' || target.tagName === 'SELECT') return;
+
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlayPause();
+            }
+        });
+        
+        // ドラッグ＆ドロップ
+        playerContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            playerContainer.classList.add('drag-over');
+        });
+        playerContainer.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            playerContainer.classList.remove('drag-over');
+        });
+        playerContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            playerContainer.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('video/')) {
+                    loadVideo(file);
+                } else {
+                    showErrorInPlaceholder('ビデオファイルをドロップしてください。');
+                }
+            }
+        });
+
+        // 初期化
+        initializePlayer();
+
+    </script>
+</body>
+</html>

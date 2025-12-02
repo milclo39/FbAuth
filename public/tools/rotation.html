@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画像回転＆トリミングアプリ</title>
+    <!-- Tailwind CSSとGoogle Fontsを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* スムーズな描画のための設定 */
+        canvas {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        /* 回転モードボタンがアクティブな時のスタイル */
+        .toggle-btn.active {
+            background-color: #3b82f6; /* Tailwindのbg-blue-600 */
+            color: white;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        /* ドラッグ中のカーソル */
+        .grabbing {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl flex flex-col gap-4">
+        <header>
+            <h1 class="text-3xl font-bold text-center text-white">画像回転＆トリミングアプリ</h1>
+            <p class="text-center text-gray-400 mt-2">画像をドラッグ＆ドロップで読み込み、回転や反転、トリミングができます。</p>
+        </header>
+
+        <!-- 操作パネル -->
+        <div class="bg-gray-800 p-4 rounded-lg shadow-lg flex flex-wrap items-center justify-center gap-4">
+            <button id="rotate-toggle-btn" class="toggle-btn px-4 py-2 bg-gray-700 rounded-lg font-medium hover:bg-gray-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>回転モード</button>
+            <button id="flip-btn" class="px-4 py-2 bg-gray-700 rounded-lg font-medium hover:bg-gray-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>左右反転</button>
+            <button id="save-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-500 transition-all duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed" disabled>選択範囲を保存</button>
+        </div>
+
+        <!-- Canvasエリア -->
+        <div id="canvas-container" class="bg-gray-800 p-2 rounded-lg shadow-lg relative w-full aspect-video cursor-pointer">
+             <!-- 画像表示と操作を行うCanvas -->
+             <canvas id="canvas" class="w-full h-full rounded bg-gray-700/50"></canvas>
+             <!-- 画像ドロップを促すプロンプト -->
+             <div id="drop-prompt" class="absolute inset-0 flex items-center justify-center pointer-events-none p-4">
+                 <div class="text-center py-8 px-4 border-4 border-dashed border-gray-600 rounded-xl bg-gray-800/50">
+                     <p class="text-lg font-semibold">画像をここにドラッグ＆ドロップ</p>
+                     <p class="text-sm text-gray-400">またはエリアをクリックしてファイルを選択</p>
+                 </div>
+             </div>
+             <!-- ファイル選択用の非表示input要素 -->
+             <input type="file" id="file-input" class="hidden" accept="image/*">
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM要素の取得
+            const canvasContainer = document.getElementById('canvas-container');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const rotateToggleBtn = document.getElementById('rotate-toggle-btn');
+            const flipBtn = document.getElementById('flip-btn');
+            const saveBtn = document.getElementById('save-btn');
+            const dropPrompt = document.getElementById('drop-prompt');
+            const fileInput = document.getElementById('file-input');
+            const buttons = [rotateToggleBtn, flipBtn, saveBtn];
+
+            // アプリケーションの状態管理
+            let image = null;
+            let rotation = 0; // 回転角度（ラジアン）
+            let scaleX = 1; // 水平方向の反転状態 (1: 通常, -1: 反転)
+            let isRotateMode = false;
+            let isDragging = false;
+            let dragStartPos = { x: 0, y: 0 };
+            let selectionRect = null;
+            let displaySize = { width: 0, height: 0 }; // 表示用の画像サイズ
+
+            // Canvasのサイズをコンテナに合わせる
+            function resizeCanvas() {
+                const containerRect = canvasContainer.getBoundingClientRect();
+                canvas.width = containerRect.width;
+                canvas.height = containerRect.height;
+                draw(); // リサイズ後も再描画
+            }
+
+            // Canvasへの描画処理
+            function draw() {
+                // Canvasをクリア
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (!image) return;
+
+                ctx.save();
+                // 座標系の中心をCanvasの中心に移動
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                // 画像を回転
+                ctx.rotate(rotation);
+                // 画像を反転
+                ctx.scale(scaleX, 1);
+                // 画像を中心に描画 (表示用サイズを使用)
+                ctx.drawImage(image, -displaySize.width / 2, -displaySize.height / 2, displaySize.width, displaySize.height);
+                ctx.restore();
+
+                // 選択範囲の矩形を描画
+                if (selectionRect) {
+                    ctx.strokeStyle = 'rgba(59, 130, 246, 0.9)'; // 青色
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([6, 3]); // 破線
+                    ctx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
+                    ctx.setLineDash([]);
+                }
+            }
+            
+            // 画像ファイルを読み込む
+            function loadImage(file) {
+                if (!file || !file.type.startsWith('image/')) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    image = new Image();
+                    image.onload = () => {
+                        // 画像が大きすぎる場合、Canvasに収まるように表示サイズを計算
+                        const maxCanvasDim = Math.min(canvas.width, canvas.height) * 0.9;
+                        const scale = Math.min(maxCanvasDim / image.naturalWidth, maxCanvasDim / image.naturalHeight);
+                        if (scale < 1) {
+                           displaySize.width = image.naturalWidth * scale;
+                           displaySize.height = image.naturalHeight * scale;
+                        } else {
+                           displaySize.width = image.naturalWidth;
+                           displaySize.height = image.naturalHeight;
+                        }
+                        
+                        // 状態をリセット
+                        rotation = 0;
+                        scaleX = 1;
+                        selectionRect = null;
+                        
+                        // UIを更新
+                        dropPrompt.style.display = 'none';
+                        buttons.forEach(btn => btn.disabled = false);
+                        saveBtn.disabled = true; // 保存ボタンは選択範囲ができるまで無効
+                        canvasContainer.style.cursor = 'crosshair';
+                        
+                        draw();
+                    };
+                    image.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+
+            // マウスイベントの座標をCanvas内の座標に変換
+            function getMousePos(e) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+            }
+
+            // --- イベントハンドラ ---
+
+            // ドラッグ＆ドロップ
+            canvasContainer.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                canvasContainer.classList.add('bg-gray-700');
+            });
+            canvasContainer.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                canvasContainer.classList.remove('bg-gray-700');
+            });
+            canvasContainer.addEventListener('drop', (e) => {
+                e.preventDefault();
+                canvasContainer.classList.remove('bg-gray-700');
+                if (e.dataTransfer.files.length > 0) {
+                    loadImage(e.dataTransfer.files[0]);
+                }
+            });
+
+            // クリックでファイル選択
+            canvasContainer.addEventListener('click', () => {
+                if (!image) {
+                   fileInput.click();
+                }
+            });
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    loadImage(e.target.files[0]);
+                }
+            });
+
+            // マウス操作
+            canvas.addEventListener('mousedown', (e) => {
+                if (!image) return;
+                isDragging = true;
+                dragStartPos = getMousePos(e);
+                if (!isRotateMode) {
+                    selectionRect = null; // 新しい選択を開始
+                } else {
+                    canvas.classList.add('grabbing');
+                }
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDragging || !image) return;
+                const currentPos = getMousePos(e);
+                
+                if (isRotateMode) {
+                    const center = { x: canvas.width / 2, y: canvas.height / 2 };
+                    const angleStart = Math.atan2(dragStartPos.y - center.y, dragStartPos.x - center.x);
+                    const angleCurrent = Math.atan2(currentPos.y - center.y, currentPos.x - center.x);
+                    rotation += angleCurrent - angleStart;
+                    dragStartPos = currentPos; // 開始点を更新してスムーズな回転に
+                } else {
+                    const x = Math.min(dragStartPos.x, currentPos.x);
+                    const y = Math.min(dragStartPos.y, currentPos.y);
+                    const width = Math.abs(dragStartPos.x - currentPos.x);
+                    const height = Math.abs(dragStartPos.y - currentPos.y);
+                    selectionRect = { x, y, width, height };
+                }
+                draw();
+            });
+            
+            canvas.addEventListener('mouseup', () => {
+                isDragging = false;
+                canvas.classList.remove('grabbing');
+                if (selectionRect && selectionRect.width > 0 && selectionRect.height > 0) {
+                    saveBtn.disabled = false;
+                } else {
+                    saveBtn.disabled = true;
+                }
+            });
+            
+            canvas.addEventListener('mouseout', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    canvas.classList.remove('grabbing');
+                }
+            });
+
+            // ボタン操作
+            rotateToggleBtn.addEventListener('click', () => {
+                isRotateMode = !isRotateMode;
+                rotateToggleBtn.classList.toggle('active', isRotateMode);
+                canvasContainer.style.cursor = isRotateMode ? 'grab' : 'crosshair';
+                selectionRect = null; // モード切替時に選択を解除
+                saveBtn.disabled = true;
+                draw();
+            });
+
+            flipBtn.addEventListener('click', () => {
+                scaleX *= -1;
+                draw();
+            });
+
+            saveBtn.addEventListener('click', () => {
+                if (!image || !selectionRect || selectionRect.width === 0 || selectionRect.height === 0) return;
+
+                // 1. 表示サイズと元サイズのスケール比を計算
+                const scale = image.naturalWidth / displaySize.width;
+
+                // 2. 保存用Canvasを作成。サイズは選択範囲を元画像のスケールに拡大したもの
+                const cropCanvas = document.createElement('canvas');
+                cropCanvas.width = selectionRect.width * scale;
+                cropCanvas.height = selectionRect.height * scale;
+                const cropCtx = cropCanvas.getContext('2d');
+
+                // 3. cropCtxに、元画像スケールでの描画処理を再現する
+                
+                // 3-1. 座標系の原点を、切り抜き領域の左上が(0,0)になるように移動させる
+                //      移動量は、画面上の選択範囲の左上座標(selectionRect.x, y)を、元画像スケールに直したもの
+                cropCtx.translate(-selectionRect.x * scale, -selectionRect.y * scale);
+                
+                // 3-2. 画面の中心座標を、元画像スケールに直す
+                const centerX = (canvas.width / 2) * scale;
+                const centerY = (canvas.height / 2) * scale;
+                
+                // 3-3. メインCanvasと同じ変換を、元画像スケールの座標系で行う
+                cropCtx.translate(centerX, centerY);
+                cropCtx.rotate(rotation);
+                cropCtx.scale(scaleX, 1);
+                
+                // 3-4. 元画像(image)を、本来のサイズ(naturalWidth/Height)で、中心(-width/2, -height/2)に描画
+                cropCtx.drawImage(
+                    image, 
+                    -image.naturalWidth / 2, 
+                    -image.naturalHeight / 2, 
+                    image.naturalWidth, 
+                    image.naturalHeight
+                );
+
+                // 画像をダウンロード
+                const dataUrl = cropCanvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = 'cropped-image.png';
+                link.click();
+            });
+
+
+            // 初期化
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+        });
+    </script>
+</body>
+</html>

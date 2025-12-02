@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高機能お絵描き＆図形操作アプリ</title>
+    <!-- Fabric.jsライブラリの読み込み -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <style>
+        /* 全体のスタイル */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans CJK JP', 'Original Yu Gothic', 'Yu Gothic', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+            margin: 0;
+            overflow: hidden; /* スクロールバーを非表示に */
+            display: flex;
+            height: 100vh;
+            background-color: #333;
+            color: #fff;
+        }
+
+        /* 左側のコントロールパネル */
+        #controls {
+            width: 250px;
+            padding: 15px;
+            background-color: #2c3e50;
+            overflow-y: auto;
+            border-right: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* 右側のキャンバスエリア */
+        #canvas-container {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-color: #34495e;
+        }
+
+        /* Fabric.jsが生成するキャンバス要素 */
+        .canvas-container {
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #c {
+            border: 1px solid #7f8c8d;
+        }
+
+        /* コントロールパネル内のセクション */
+        .control-section {
+            background: #34495e;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .control-section h3 {
+            font-size: 1rem;
+            margin-top: 0;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #4a6572;
+            color: #ecf0f1;
+        }
+
+        /* ボタンやUI要素のグループ */
+        .tool-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+            gap: 8px;
+        }
+
+        .tool-group.widths {
+             grid-template-columns: repeat(4, 1fr);
+        }
+
+        /* 汎用ボタンスタイル */
+        button, select, input {
+            padding: 8px;
+            border: none;
+            background-color: #4a6572;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            border-bottom: 2px solid #3b505c;
+            box-sizing: border-box;
+            width: 100%;
+        }
+        input[type="number"] {
+            padding-right: 2px;
+        }
+
+        button:hover, select:hover, input:hover {
+            background-color: #5e7686;
+        }
+        button:active {
+            transform: translateY(1px);
+            border-bottom-width: 1px;
+        }
+        
+        button:disabled {
+            background-color: #3b505c;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* 選択中のツールを示すアクティブスタイル */
+        button.active {
+            background-color: #3498db;
+            color: white;
+            border-color: #2980b9;
+            box-shadow: 0 0 10px rgba(52, 152, 219, 0.5);
+        }
+
+        /* 色選択ボタン */
+        .color-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            padding: 0;
+        }
+        .color-btn.active {
+            border-color: #3498db;
+            transform: scale(1.1);
+        }
+
+        /* 操作ボタン */
+        #clear-btn { background-color: #c0392b; border-color: #a53125; }
+        #copy-btn { background-color: #3498db; border-color: #2980b9; }
+        #download-btn { background-color: #27ae60; border-color: #229954; }
+        
+        /* テキスト設定パネル */
+        #text-controls {
+            display: none; /* 初期状態では非表示 */
+        }
+        #text-controls.active {
+            display: block; /* activeクラスが付いたら表示 */
+        }
+        .text-style-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .text-deco-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        #text-bold { font-weight: bold; }
+        #text-italic { font-style: italic; }
+        #text-underline { text-decoration: underline; }
+
+    </style>
+</head>
+<body>
+
+    <!-- 左側のコントロールパネル -->
+    <div id="controls">
+        <div class="control-section">
+            <h3>ツール</h3>
+            <div class="tool-group" style="grid-template-columns: 1fr 1fr 1fr;">
+                <button id="pen-btn" class="active">ペン</button>
+                <button id="select-btn">選択</button>
+                <button id="text-tool-btn">テキスト</button>
+            </div>
+             <small style="display: block; margin-top: 10px; color: #bdc3c7;">「選択」モードでオブジェクトを右クリックすると削除できます。</small>
+        </div>
+
+        <div class="control-section">
+            <h3>ペンの色</h3>
+            <div id="color-palette" class="tool-group">
+                <button class="color-btn" style="background-color: white;" data-color="white"></button>
+                <button class="color-btn active" style="background-color: black;" data-color="black"></button>
+                <button class="color-btn" style="background-color: #e74c3c;" data-color="#e74c3c"></button> <!-- 赤 -->
+                <button class="color-btn" style="background-color: #e67e22;" data-color="#e67e22"></button> <!-- 橙 -->
+                <button class="color-btn" style="background-color: #f1c40f;" data-color="#f1c40f"></button> <!-- 黄 -->
+                <button class="color-btn" style="background-color: #2ecc71;" data-color="#2ecc71"></button> <!-- 緑 -->
+                <button class="color-btn" style="background-color: #3498db;" data-color="#3498db"></button> <!-- 青 -->
+                <button class="color-btn" style="background-color: #9b59b6;" data-color="#9b59b6"></button> <!-- 紫 -->
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>ペンの太さ</h3>
+            <div id="pen-width" class="tool-group widths">
+                <button class="width-btn" data-width="5">小</button>
+                <button class="width-btn active" data-width="10">中</button>
+                <button class="width-btn" data-width="20">大</button>
+                <button class="width-btn" data-width="40">特大</button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>図形</h3>
+            <div id="shape-tools" class="tool-group">
+                <button data-shape="line">直線</button>
+                <button data-shape="circle">○</button>
+                <button data-shape="rect">□</button>
+                <button data-shape="triangle">△</button>
+                <button data-shape="star">☆</button>
+                <button data-shape="cross">✕</button>
+            </div>
+        </div>
+
+        <!-- テキスト設定パネル（選択時に表示） -->
+        <div id="text-controls" class="control-section">
+            <h3>テキスト設定</h3>
+            <div class="text-style-group">
+                <select id="font-family">
+                    <option value="Arial">Arial</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="serif">明朝体</option>
+                    <option value="sans-serif">ゴシック体</option>
+                </select>
+                <input type="number" id="font-size" value="40" min="1">
+            </div>
+            <div class="text-deco-group">
+                <button id="text-bold">B</button>
+                <button id="text-italic">I</button>
+                <button id="text-underline">U</button>
+            </div>
+        </div>
+
+        <div class="control-section" style="margin-top: auto;">
+             <h3>操作</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button id="undo-btn">元に戻す</button>
+                <button id="redo-btn">やり直し</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                <button id="copy-btn">コピー (Copy)</button>
+                <button id="clear-btn">全消し (Clear)</button>
+                <button id="download-btn">保存 (Download)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右側のキャンバスエリア -->
+    <div id="canvas-container">
+        <canvas id="c"></canvas>
+    </div>
+
+    <script>
+        (() => {
+            // --- 1. DOM要素の取得 ---
+            const canvasContainer = document.getElementById('canvas-container');
+            const penBtn = document.getElementById('pen-btn');
+            const selectBtn = document.getElementById('select-btn');
+            const textToolBtn = document.getElementById('text-tool-btn');
+            const textControls = document.getElementById('text-controls');
+            const fontFamilySelect = document.getElementById('font-family');
+            const fontSizeInput = document.getElementById('font-size');
+            const textBoldBtn = document.getElementById('text-bold');
+            const textItalicBtn = document.getElementById('text-italic');
+            const textUnderlineBtn = document.getElementById('text-underline');
+            const undoBtn = document.getElementById('undo-btn');
+            const redoBtn = document.getElementById('redo-btn');
+
+            // --- 2. Fabric.jsキャンバスと状態変数の初期化 ---
+            const canvas = new fabric.Canvas('c', {
+                backgroundColor: '#ffffff',
+                selection: true, cornerColor: '#3498db', cornerSize: 10,
+                transparentCorners: false, borderColor: '#3498db', cornerStyle: 'circle'
+            });
+            let currentMode = 'pen';
+            canvas.isDrawingMode = true;
+            
+            // --- [新機能] アンドゥ・リドゥ用の履歴管理 ---
+            let history = [];
+            let historyIndex = -1;
+            let historyLock = false; // 履歴をロード中に、新たな履歴が保存されるのを防ぐロック
+
+            // --- 3. キャンバスサイズのレスポンシブ対応 ---
+            const resizeCanvas = () => {
+                canvas.setWidth(canvasContainer.offsetWidth - 40).setHeight(canvasContainer.offsetHeight - 40).renderAll();
+            };
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            // --- 4. ペンの設定 ---
+            let currentColor = 'black';
+            let currentWidth = 10;
+            canvas.freeDrawingBrush.color = currentColor;
+            canvas.freeDrawingBrush.width = currentWidth;
+            document.getElementById('color-palette').addEventListener('click', (e) => {
+                if (e.target.classList.contains('color-btn')) {
+                    currentColor = e.target.dataset.color;
+                    canvas.freeDrawingBrush.color = currentColor;
+                    document.querySelector('#color-palette .active').classList.remove('active');
+                    e.target.classList.add('active');
+                }
+            });
+            document.getElementById('pen-width').addEventListener('click', (e) => {
+                if (e.target.classList.contains('width-btn')) {
+                    currentWidth = parseInt(e.target.dataset.width, 10);
+                    canvas.freeDrawingBrush.width = currentWidth;
+                    document.querySelector('#pen-width .active').classList.remove('active');
+                    e.target.classList.add('active');
+                }
+            });
+
+            // --- 5. モード切替 ---
+            const updateToolMode = (newMode) => {
+                currentMode = newMode;
+                canvas.isDrawingMode = (currentMode === 'pen');
+                penBtn.classList.toggle('active', currentMode === 'pen');
+                selectBtn.classList.toggle('active', currentMode === 'select');
+                textToolBtn.classList.toggle('active', currentMode === 'text');
+                canvas.discardActiveObject().requestRenderAll();
+            };
+            penBtn.addEventListener('click', () => updateToolMode('pen'));
+            selectBtn.addEventListener('click', () => updateToolMode('select'));
+            textToolBtn.addEventListener('click', () => updateToolMode('text'));
+
+            // --- 6. テキスト追加とオブジェクト削除 ---
+            canvas.on('mouse:down', (options) => {
+                if (currentMode === 'text' && options.target == null) {
+                    const text = new fabric.IText('テキスト', {
+                        left: options.pointer.x,
+                        top: options.pointer.y,
+                        fontFamily: 'sans-serif',
+                        fontSize: 40,
+                        fill: currentColor,
+                        originX: 'center',
+                        originY: 'center',
+                    });
+                    canvas.add(text);
+                    canvas.setActiveObject(text);
+                    updateToolMode('select');
+                }
+            });
+            canvas.wrapperEl.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                if (currentMode === 'pen') return;
+                const target = canvas.findTarget(e, false);
+                if (target) {
+                    canvas.remove(target);
+                    canvas.discardActiveObject().requestRenderAll();
+                }
+            });
+            
+            // --- 7. テキスト設定パネル ---
+            const updateTextControls = () => {
+                const activeObject = canvas.getActiveObject();
+                if (activeObject && activeObject.type === 'i-text') {
+                    textControls.classList.add('active');
+                    fontSizeInput.value = activeObject.get('fontSize');
+                    fontFamilySelect.value = activeObject.get('fontFamily');
+                    textBoldBtn.classList.toggle('active', activeObject.get('fontWeight') === 'bold');
+                    textItalicBtn.classList.toggle('active', activeObject.get('fontStyle') === 'italic');
+                    textUnderlineBtn.classList.toggle('active', activeObject.get('underline'));
+                } else {
+                    textControls.classList.remove('active');
+                }
+            };
+            canvas.on({ 'selection:created': updateTextControls, 'selection:updated': updateTextControls, 'selection:cleared': updateTextControls });
+
+            // --- 8. テキストスタイル変更 ---
+            const applyTextStyle = (prop, value) => {
+                const activeObject = canvas.getActiveObject();
+                if (activeObject && activeObject.type === 'i-text') { activeObject.set(prop, value); canvas.requestRenderAll(); }
+            };
+            const toggleTextStyle = (prop, valueOn, valueOff) => {
+                const activeObject = canvas.getActiveObject();
+                if (activeObject && activeObject.type === 'i-text') {
+                    const isSet = activeObject.get(prop) === valueOn;
+                    activeObject.set(prop, isSet ? valueOff : valueOn);
+                    canvas.requestRenderAll();
+                    updateTextControls();
+                }
+            };
+            fontFamilySelect.addEventListener('change', (e) => applyTextStyle('fontFamily', e.target.value));
+            fontSizeInput.addEventListener('input', (e) => applyTextStyle('fontSize', parseInt(e.target.value, 10) || 1));
+            textBoldBtn.addEventListener('click', () => toggleTextStyle('fontWeight', 'bold', 'normal'));
+            textItalicBtn.addEventListener('click', () => toggleTextStyle('fontStyle', 'italic', 'normal'));
+            textUnderlineBtn.addEventListener('click', () => toggleTextStyle('underline', true, false));
+
+            // --- 9. 図形挿入 ---
+            document.getElementById('shape-tools').addEventListener('click', (e) => {
+                if (!e.target.matches('button[data-shape]')) return;
+                updateToolMode('select');
+                const shapeType = e.target.dataset.shape;
+                let shape = null;
+                const center = canvas.getCenter();
+                const commonOptions = { left: center.left, top: center.top, originX: 'center', originY: 'center', fill: currentColor, stroke: 'black', strokeWidth: 2 };
+                switch (shapeType) {
+                    case 'line': shape = new fabric.Line([0, 0, 150, 0], { ...commonOptions, stroke: currentColor, strokeWidth: currentWidth, fill: null }); break;
+                    case 'circle': shape = new fabric.Circle({ ...commonOptions, radius: 50 }); break;
+                    case 'rect': shape = new fabric.Rect({ ...commonOptions, width: 100, height: 100 }); break;
+                    case 'triangle': shape = new fabric.Triangle({ ...commonOptions, width: 100, height: 100 }); break;
+                    case 'star': shape = new fabric.Polygon([{x: 0, y: -50}, {x: 12, y: -15}, {x: 48, y: -15}, {x: 19, y: 10}, {x: 30, y: 45}, {x: 0, y: 25}, {x: -30, y: 45}, {x: -19, y: 10}, {x: -48, y: -15}, {x: -12, y: -15}], { ...commonOptions }); break;
+                    case 'cross': shape = new fabric.Group([new fabric.Line([-30, -30, 30, 30], { stroke: currentColor, strokeWidth: currentWidth }), new fabric.Line([30, -30, -30, 30], { stroke: currentColor, strokeWidth: currentWidth })], { ...commonOptions, fill: null, stroke: null }); break;
+                }
+                if (shape) { canvas.add(shape).setActiveObject(shape).requestRenderAll(); }
+            });
+
+            // --- 10. 画像D&D ---
+            window.addEventListener('dragover', (e) => e.preventDefault());
+            window.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (e.target.closest('#controls') || !e.dataTransfer.files.length) return;
+                const file = e.dataTransfer.files[0];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (f) => {
+                        fabric.Image.fromURL(f.target.result, (img) => {
+                            const scale = Math.min(canvas.width / img.width / 1.5, canvas.height / img.height / 1.5);
+                            img.scale(scale);
+                            canvas.add(img).centerObject(img).setActiveObject(img).requestRenderAll();
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // --- 11. 操作ボタン ---
+            document.getElementById('clear-btn').addEventListener('click', () => { canvas.clear(); canvas.backgroundColor = '#ffffff'; canvas.requestRenderAll(); });
+            document.getElementById('download-btn').addEventListener('click', () => {
+                const dataURL = canvas.toDataURL({ format: 'png', quality: 1.0 });
+                const link = document.createElement('a');
+                link.href = dataURL;
+                link.download = 'my-drawing.png';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+            document.getElementById('copy-btn').addEventListener('click', () => {
+                const activeObject = canvas.getActiveObject();
+                if (!activeObject) return;
+                activeObject.clone((cloned) => {
+                    canvas.discardActiveObject();
+                    cloned.set({ left: cloned.left + 10, top: cloned.top + 10 });
+                    if (cloned.type === 'activeSelection') {
+                        cloned.canvas = canvas;
+                        cloned.forEachObject((obj) => canvas.add(obj));
+                        cloned.setCoords();
+                    } else {
+                        canvas.add(cloned);
+                    }
+                    canvas.setActiveObject(cloned);
+                    canvas.requestRenderAll();
+                });
+            });
+
+            // --- 12. [新機能] アンドゥ・リドゥ機能の実装 ---
+            const updateHistoryButtons = () => {
+                undoBtn.disabled = historyIndex <= 0;
+                redoBtn.disabled = historyIndex >= history.length - 1;
+            };
+
+            const saveState = () => {
+                if (historyLock) return;
+                history = history.slice(0, historyIndex + 1);
+                history.push(JSON.stringify(canvas));
+                historyIndex = history.length - 1;
+                updateHistoryButtons();
+            };
+
+            const loadState = (index) => {
+                if (historyLock) return;
+                historyLock = true;
+                canvas.loadFromJSON(history[index], () => {
+                    canvas.renderAll();
+                    historyLock = false;
+                    updateHistoryButtons();
+                });
+            };
+
+            undoBtn.addEventListener('click', () => {
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    loadState(historyIndex);
+                }
+            });
+
+            redoBtn.addEventListener('click', () => {
+                if (historyIndex < history.length - 1) {
+                    historyIndex++;
+                    loadState(historyIndex);
+                }
+            });
+            
+            // キャンバスが変更されたら履歴を保存
+            canvas.on('object:added', saveState);
+            canvas.on('object:removed', saveState);
+            canvas.on('object:modified', saveState);
+
+            // 初期状態を保存
+            saveState();
+
+        })();
+    </script>
+</body>
+</html>

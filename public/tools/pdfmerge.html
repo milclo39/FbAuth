@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 結合ツール</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SortableJS for drag-and-drop reordering -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    <!-- PDF.js for generating previews -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        // PDF.js workerのパスを設定
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+    </script>
+    
+    <!-- pdf-lib.js for merging PDFs -->
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib/dist/pdf-lib.min.js"></script>
+
+    <style>
+        /* カスタムスタイル */
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .drop-zone.dragover {
+            background-color: #e2e8f0;
+            border-color: #4f46e5;
+        }
+        .preview-item {
+            cursor: grab;
+            touch-action: none; /* for mobile drag */
+        }
+        .preview-item:active {
+            cursor: grabbing;
+        }
+        .sortable-ghost {
+            opacity: 0.4;
+            background: #c7d2fe;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        
+        <!-- ヘッダー -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900">PDF 結合ツール</h1>
+            <p class="mt-2 text-slate-600">PDFファイルをドラッグ＆ドロップで追加し、順番を並べ替えて結合します。</p>
+        </header>
+
+        <!-- ファイルドロップゾーン -->
+        <div id="drop-zone" class="drop-zone relative w-full p-8 rounded-lg bg-white shadow-sm text-center">
+            <input type="file" id="file-input" multiple accept="application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <div class="flex flex-col items-center justify-center pointer-events-none">
+                <svg class="w-12 h-12 text-slate-400 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3 3m3-3l3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                </svg>
+                <p class="text-slate-700 font-semibold">ここにファイルをドラッグ＆ドロップ</p>
+                <p class="text-slate-500 text-sm mt-1">またはクリックしてファイルを選択</p>
+            </div>
+        </div>
+
+        <!-- プレビューエリア -->
+        <div id="preview-container" class="mt-8 hidden">
+            <h2 class="text-xl font-semibold mb-4 text-slate-800">ファイルのプレビューと順序変更</h2>
+            <div id="preview-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <!-- プレビューアイテムがここに追加されます -->
+            </div>
+        </div>
+
+        <!-- 操作ボタンエリア -->
+        <div id="actions-container" class="mt-8 text-center hidden">
+            <button id="merge-button" class="bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-indigo-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed">
+                <span id="merge-button-text">PDFを結合してダウンロード</span>
+                <span id="merge-spinner" class="hidden">
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    処理中...
+                </span>
+            </button>
+        </div>
+
+        <!-- エラー・情報メッセージ表示エリア -->
+        <div id="message-box" class="mt-6 text-center"></div>
+
+    </div>
+
+    <script>
+        // --- DOM要素の取得 ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const previewContainer = document.getElementById('preview-container');
+        const previewList = document.getElementById('preview-list');
+        const actionsContainer = document.getElementById('actions-container');
+        const mergeButton = document.getElementById('merge-button');
+        const mergeButtonText = document.getElementById('merge-button-text');
+        const mergeSpinner = document.getElementById('merge-spinner');
+        const messageBox = document.getElementById('message-box');
+
+        // --- グローバル変数 ---
+        let fileObjects = []; // ファイルオブジェクトを管理する配列
+        const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+        // --- イベントリスナーの設定 ---
+
+        // ドラッグ＆ドロップのイベント
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            handleFiles(files);
+        });
+
+        // ファイル選択ボタンのイベント
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            handleFiles(files);
+        });
+
+        // 結合ボタンのイベント
+        mergeButton.addEventListener('click', mergePdfs);
+
+        // SortableJSの初期化
+        const sortable = new Sortable(previewList, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onEnd: () => {
+                // DOMの順序に基づいてfileObjects配列を並べ替える
+                const newFileObjects = [];
+                previewList.querySelectorAll('.preview-item').forEach(item => {
+                    const fileId = item.dataset.id;
+                    const file = fileObjects.find(f => f.id === fileId);
+                    if (file) {
+                        newFileObjects.push(file);
+                    }
+                });
+                fileObjects = newFileObjects;
+            }
+        });
+
+        // --- 関数定義 ---
+
+        /**
+         * 選択されたファイルを処理する
+         * @param {FileList} files - ユーザーが選択したファイルのリスト
+         */
+        function handleFiles(files) {
+            clearMessages();
+            let added = false;
+            for (const file of files) {
+                // ファイルタイプの検証
+                if (file.type !== 'application/pdf') {
+                    showMessage(`'${file.name}' はPDFファイルではありません。`, 'error');
+                    continue;
+                }
+                // ファイルサイズの検証
+                if (file.size > MAX_FILE_SIZE) {
+                    showMessage(`'${file.name}' はサイズが大きすぎます（最大50MB）。`, 'error');
+                    continue;
+                }
+                // 重複ファイルの検証
+                if (fileObjects.some(f => f.name === file.name && f.size === file.size)) {
+                    showMessage(`'${file.name}' は既に追加されています。`, 'info');
+                    continue;
+                }
+
+                const fileId = `file-${Date.now()}-${Math.random()}`;
+                const fileData = { id: fileId, file: file, name: file.name, size: file.size };
+                fileObjects.push(fileData);
+                createPreview(fileData);
+                added = true;
+            }
+            if(added) updateUI();
+        }
+
+        /**
+         * ファイルのプレビューを生成して表示する
+         * @param {object} fileData - 処理するファイルデータ
+         */
+        async function createPreview(fileData) {
+            const { id, file } = fileData;
+
+            const item = document.createElement('div');
+            item.className = 'preview-item relative p-2 border rounded-lg bg-white shadow-sm flex flex-col items-center text-center';
+            item.dataset.id = id;
+
+            const canvas = document.createElement('canvas');
+            canvas.className = 'w-full h-auto object-cover rounded-md border bg-slate-100';
+            
+            const name = document.createElement('p');
+            name.className = 'text-xs mt-2 break-all text-slate-700';
+            name.textContent = file.name;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow hover:bg-red-600 transition-colors';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.onclick = (e) => {
+                e.stopPropagation();
+                fileObjects = fileObjects.filter(f => f.id !== id);
+                item.remove();
+                updateUI();
+            };
+
+            item.appendChild(removeBtn);
+            item.appendChild(canvas);
+            item.appendChild(name);
+            previewList.appendChild(item);
+
+            try {
+                const fileReader = new FileReader();
+                fileReader.onload = async (e) => {
+                    try {
+                        const typedarray = new Uint8Array(e.target.result);
+                        const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                        const page = await pdf.getPage(1);
+                        
+                        const viewport = page.getViewport({ scale: 1 });
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        
+                        await page.render({ canvasContext: context, viewport: viewport }).promise;
+                    } catch (err) {
+                        console.error('PDFプレビュー生成エラー:', err);
+                        item.classList.add('border-red-500');
+                        name.textContent = '破損したPDF';
+                        name.classList.add('text-red-600', 'font-bold');
+                        showMessage(`'${file.name}' は破損しているか、プレビューを生成できません。`, 'error');
+                    }
+                };
+                fileReader.readAsArrayBuffer(file);
+            } catch (err) {
+                console.error('ファイル読み込みエラー:', err);
+                showMessage(`'${file.name}' の読み込み中にエラーが発生しました。`, 'error');
+            }
+        }
+
+        /**
+         * 複数のPDFを結合してダウンロードを開始する
+         */
+        async function mergePdfs() {
+            if (fileObjects.length < 2) {
+                showMessage('結合するには2つ以上のPDFファイルが必要です。', 'info');
+                return;
+            }
+
+            setLoading(true);
+            clearMessages();
+
+            try {
+                const mergedPdf = await PDFLib.PDFDocument.create();
+
+                for (const fileData of fileObjects) {
+                    try {
+                        const arrayBuffer = await fileData.file.arrayBuffer();
+                        const pdf = await PDFLib.PDFDocument.load(arrayBuffer, { 
+                            // 破損したPDFを無視するオプションはpdf-libには直接ないため、try-catchで対応
+                            ignoreEncryption: true 
+                        });
+                        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                        copiedPages.forEach((page) => mergedPdf.addPage(page));
+                    } catch (err) {
+                         console.error(`ファイル '${fileData.name}' の処理中にエラー:`, err);
+                         showMessage(`'${fileData.name}' は破損しているか、処理できない形式のためスキップされました。`, 'error');
+                         continue; // 次のファイルへ
+                    }
+                }
+                
+                if (mergedPdf.getPageCount() === 0) {
+                    showMessage('有効なページを結合できませんでした。すべてのファイルが破損している可能性があります。', 'error');
+                    setLoading(false);
+                    return;
+                }
+
+                const mergedPdfBytes = await mergedPdf.save();
+                
+                const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `merged-${Date.now()}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // 成功したらリセット
+                resetApp();
+                showMessage('PDFの結合とダウンロードが完了しました。', 'success');
+
+            } catch (err) {
+                console.error('PDF結合エラー:', err);
+                showMessage('PDFの結合中に予期せぬエラーが発生しました。', 'error');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        /**
+         * UIの状態を更新する
+         */
+        function updateUI() {
+            if (fileObjects.length > 0) {
+                previewContainer.classList.remove('hidden');
+                actionsContainer.classList.remove('hidden');
+                dropZone.classList.add('hidden'); // ファイルが追加されたらドロップゾーンを隠す
+            } else {
+                previewContainer.classList.add('hidden');
+                actionsContainer.classList.add('hidden');
+                dropZone.classList.remove('hidden'); // ファイルがなくなったらドロップゾーンを再表示
+            }
+            mergeButton.disabled = fileObjects.length < 2;
+        }
+        
+        /**
+         * アプリケーションの状態を初期化する
+         */
+        function resetApp() {
+            fileObjects = [];
+            previewList.innerHTML = '';
+            updateUI();
+        }
+
+        /**
+         * 処理中のローディング状態を設定する
+         * @param {boolean} isLoading - ローディング中かどうか
+         */
+        function setLoading(isLoading) {
+            mergeButton.disabled = isLoading;
+            if (isLoading) {
+                mergeButtonText.classList.add('hidden');
+                mergeSpinner.classList.remove('hidden');
+            } else {
+                mergeButtonText.classList.remove('hidden');
+                mergeSpinner.classList.add('hidden');
+            }
+        }
+
+        /**
+         * メッセージを表示する
+         * @param {string} text - 表示するメッセージ
+         * @param {'info'|'success'|'error'} type - メッセージの種類
+         */
+        function showMessage(text, type = 'info') {
+            const messageEl = document.createElement('div');
+            let bgColor, textColor;
+            switch (type) {
+                case 'success':
+                    bgColor = 'bg-green-100';
+                    textColor = 'text-green-800';
+                    break;
+                case 'error':
+                    bgColor = 'bg-red-100';
+                    textColor = 'text-red-800';
+                    break;
+                case 'info':
+                default:
+                    bgColor = 'bg-blue-100';
+                    textColor = 'text-blue-800';
+                    break;
+            }
+            messageEl.className = `p-3 rounded-lg ${bgColor} ${textColor} mb-2 animate-pulse`;
+            messageEl.textContent = text;
+            messageBox.appendChild(messageEl);
+
+            // 5秒後にメッセージを消す
+            setTimeout(() => {
+                messageEl.style.transition = 'opacity 0.5s';
+                messageEl.style.opacity = '0';
+                setTimeout(() => messageEl.remove(), 500);
+            }, 5000);
+        }
+
+        /**
+         * すべてのメッセージを消去する
+         */
+        function clearMessages() {
+            messageBox.innerHTML = '';
+        }
+
+    </script>
+
+</body>
+</html>

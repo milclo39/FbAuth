@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Authentication サンプル</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md bg-white rounded-lg shadow-md p-8">
+        <h1 class="text-2xl font-bold text-center text-gray-800 mb-2">Firebase Auth</h1>
+        <p class="text-center text-gray-500 mb-6">サインアップまたはログインしてください</p>
+
+        <!-- 認証状態表示 -->
+        <div id="auth-status" class="mb-4 p-3 rounded-md text-center text-sm font-medium">
+            <!-- JavaScriptによって内容が更新されます -->
+        </div>
+
+        <!-- 入力フォーム -->
+        <div class="space-y-4 mb-6">
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700">メールアドレス</label>
+                <input type="email" id="email" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="you@example.com">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700">パスワード</label>
+                <input type="password" id="password" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="6文字以上">
+            </div>
+        </div>
+
+        <!-- ボタン -->
+        <div id="auth-actions" class="space-y-3">
+             <div class="flex space-x-3">
+                <button id="signup-button" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    サインアップ
+                </button>
+                <button id="login-button" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                    ログイン
+                </button>
+            </div>
+            <button id="logout-button" class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                ログアウト
+            </button>
+        </div>
+        
+        <!-- メッセージ表示エリア -->
+        <div id="error-message" class="mt-4 text-center text-sm text-red-600 font-medium"></div>
+        <div id="success-message" class="mt-4 text-center text-sm text-green-600 font-medium"></div>
+
+    </div>
+
+    <!-- Firebase SDKの読み込み -->
+    <script type="module">
+        // Firebase SDK のコアと Authentication をインポート
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signOut,
+            onAuthStateChanged,
+            sendEmailVerification // メール認証機能を追加
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // =================================================================
+        // TODO: ここにFirebaseコンソールで取得したあなたの設定を貼り付けてください
+        const firebaseConfig = {
+            apiKey: "AIzaSyCjsA2sYDk5pyXw_qmwSqDkK6jcijVwjhw",
+            authDomain: "miclosoft.firebaseapp.com",
+            projectId: "miclosoft",
+            storageBucket: "miclosoft.firebasestorage.app",
+            messagingSenderId: "647566802317",
+            appId: "1:647566802317:web:9efd03242f25b76babd1c4"
+        };
+        // =================================================================
+
+        // Firebaseアプリを初期化
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // DOM要素の取得
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const signupButton = document.getElementById('signup-button');
+        const loginButton = document.getElementById('login-button');
+        const logoutButton = document.getElementById('logout-button');
+        const authStatus = document.getElementById('auth-status');
+        const errorMessage = document.getElementById('error-message');
+        const successMessage = document.getElementById('success-message');
+
+        // 認証状態の変更を監視
+        onAuthStateChanged(auth, (user) => {
+            // ログイン済み かつ メール認証済み の場合のみリダイレクト
+            if (user && user.emailVerified) {
+                window.location.href = 'main.html';
+            } else {
+                // ユーザーがログインしていない、またはメール未認証の場合はUIを更新
+                updateUI(null);
+            }
+        });
+        
+        // UI更新関数
+        const updateUI = (user) => {
+            errorMessage.textContent = ''; // エラーメッセージをクリア
+            successMessage.textContent = ''; // 成功メッセージをクリア
+
+            // このページではログインフォームを常に表示するため、user引数は使用しない
+            authStatus.textContent = 'ログアウトしています';
+            authStatus.className = 'mb-4 p-3 rounded-md text-center text-sm font-medium bg-gray-200 text-gray-800';
+            signupButton.style.display = 'block';
+            loginButton.style.display = 'block';
+            logoutButton.style.display = 'none'; // このページではログアウトボタンは不要
+            emailInput.disabled = false;
+            passwordInput.disabled = false;
+        };
+        
+        // エラーハンドリング関数
+        const handleError = (error) => {
+            console.error("Authentication Error:", error);
+            switch (error.code) {
+                case 'auth/invalid-email':
+                    errorMessage.textContent = '無効なメールアドレスです。';
+                    break;
+                case 'auth/user-not-found':
+                    errorMessage.textContent = 'ユーザーが見つかりません。';
+                    break;
+                case 'auth/wrong-password':
+                    errorMessage.textContent = 'パスワードが間違っています。';
+                    break;
+                case 'auth/email-already-in-use':
+                    errorMessage.textContent = 'このメールアドレスは既に使用されています。';
+                    break;
+                case 'auth/weak-password':
+                    errorMessage.textContent = 'パスワードは6文字以上で設定してください。';
+                    break;
+                default:
+                    errorMessage.textContent = 'エラーが発生しました。もう一度お試しください。';
+                    break;
+            }
+        };
+
+        // サインアップ処理
+        signupButton.addEventListener('click', async () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            errorMessage.textContent = '';
+            successMessage.textContent = '';
+
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                // 確認メールを送信
+                await sendEmailVerification(userCredential.user);
+                
+                console.log('Signed up and verification email sent:', userCredential.user);
+                successMessage.textContent = '確認メールを送信しました。メールを確認して認証を完了してください。';
+            } catch (error) {
+                handleError(error);
+            }
+        });
+
+        // ログイン処理
+        loginButton.addEventListener('click', async () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            errorMessage.textContent = '';
+            successMessage.textContent = '';
+
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                
+                // メールアドレスが確認されているかチェック
+                if (!userCredential.user.emailVerified) {
+                    await signOut(auth); // 未確認なら強制的にログアウト
+                    errorMessage.textContent = 'メールアドレスが確認されていません。受信トレイを確認してください。';
+                    return; // 処理を中断
+                }
+
+                // 認証成功後、onAuthStateChangedが検知してページ遷移します
+                console.log('Logged in:', userCredential.user);
+
+            } catch (error) {
+                handleError(error);
+            }
+        });
+
+		// キーイベント
+		document.addEventListener("keydown", function (e) {
+		  if (e.key === "Enter") {
+		    loginButton.click();
+		  }
+		});
+
+        // このページでは onAuthStateChanged がログアウト状態を管理するため、
+        // ログアウトボタンのクリックイベントは不要です。
+        // もし残す場合は、signOut(auth) を呼び出す処理を記述します。
+        logoutButton.addEventListener('click', () => signOut(auth));
+    </script>
+
+</body>
+</html>

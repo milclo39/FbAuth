@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>stopwatch</title>
+		<style>
+			html, body{
+			    //font-family:"Arial";
+			    font-size:16px;
+			    background-color: #49c0eb;
+			}
+
+			h1{
+			    color:#ffffff;
+			    text-align:center;
+			    font-size:2rem;
+			    margin:3rem;
+			}
+
+			#container{
+			    background-color:#ffffff;
+			    width:800px;
+			    border-radius:1rem;
+			    margin: auto;
+			    padding:1.5rem;
+			}
+
+			#time{
+			    color:#1e90ff;
+			    font-size:7rem;
+			    text-align:center;
+			    padding:1rem;
+			    border-radius:1rem;
+			    box-shadow:0 0 20px rgba(0, 139, 253, 0.25);
+			}
+
+			#buttons{
+			    font-size:3rem;
+			    text-align:center;
+			}
+
+			#start, #stop, #reset, #laptime{
+			    font-size:1.5rem;
+			    border-radius: .3rem;
+			    box-shadow:0 0 20px rgba(77, 78, 79, 0.25)
+			}
+
+			#lap {
+			    position: relative;
+			    text-align: center;
+			    font-size: 18px;
+			    height: 100px;
+			    overflow-y: scroll;
+			    width: 100%;
+			    min-height: 108px;
+			    margin-top: 60px;
+			    margin-bottom: 10px;
+			    left: 0px;
+			}
+		</style>
+    </head>
+    <body>
+        <!--h1>stopwatch</h1-->
+        <div id="container">
+            <div id="time">00:00.00</div>
+            <div id="buttons">
+                <input id="start" type="button" value="start">
+                <input id="stop" type="button" value="stop" disabled>
+                <input id="reset" type="button" value="reset" disabled>
+                <input id="laptime" type="button" value="laptime" disabled>
+            </div>
+			<div id='lap'></div>
+        </div>
+	    <script>
+			const time = document.getElementById('time');
+			const startButton = document.getElementById('start');
+			const stopButton = document.getElementById('stop');
+			const resetButton = document.getElementById('reset');
+			const laptimeButton = document.getElementById('laptime');
+			const laptimeArea = document.getElementById('lap');
+			laptimeArea.hidden = true;
+
+			let startTime;
+			let stopTime = 0;
+			let lapTime = 0;
+			let timeoutID;
+			let index = 0;
+
+			//
+			function displayTime() {
+			  const currentTime = new Date(Date.now() - startTime + stopTime);
+			  const h = String(currentTime.getHours()-9).padStart(2, '0');
+			  const m = String(currentTime.getMinutes()).padStart(2, '0');
+			  const s = String(currentTime.getSeconds()).padStart(2, '0');
+			  const ms = String(Math.floor(currentTime.getMilliseconds()/10)).padStart(2, '0');
+			  if(h > 0){
+			    time.textContent = `${h}:${m}:${s}.${ms}`;
+			  }
+			  else{
+			    time.textContent = `${m}:${s}.${ms}`;
+			  }
+			  timeoutID = setTimeout(displayTime, 10);
+			}
+
+			// start
+			startButton.addEventListener('click', () => {
+			  startButton.disabled = true;
+			  stopButton.disabled = false;
+			  resetButton.disabled = true;
+			  laptimeButton.disabled = false;
+			  startTime = Date.now();
+			  displayTime();
+			});
+
+			// stop
+			stopButton.addEventListener('click', function() {
+			  startButton.disabled = false;
+			  stopButton.disabled = true;
+			  resetButton.disabled = false;
+			  laptimeButton.disabled = true;
+			  clearTimeout(timeoutID);
+			  stopTime += (Date.now() - startTime);
+			});
+
+			// reset
+			resetButton.addEventListener('click', function() {
+			  startButton.disabled = false;
+			  stopButton.disabled = true;
+			  resetButton.disabled = true;
+			  laptimeButton.disabled = true;
+			  time.textContent = '00:00.00';
+			  stopTime = 0;
+			  index = 0;
+			  laptimeArea.hidden = true;
+			  laptimeArea.textContent = "";
+			});
+
+			// laptime
+			laptimeButton.addEventListener('click', function() {
+			  let lapElement = document.createElement("div");
+			  lapTime = (Date.now() - startTime);
+
+			  // ミリ秒を分、秒、ミリ秒に変換
+			  let m = String(Math.floor(lapTime / 60000)).padStart(2, '0');  // 分
+			  let s = String(Math.floor((lapTime % 60000) / 1000)).padStart(2, '0');  // 秒
+			  let ms = String(Math.floor((lapTime % 1000) / 10)).padStart(2, '0');  // ミリ秒（2桁）
+
+			  index++;
+			  lapElement.textContent = `LAP${index}: ${m}:${s}.${ms}`;
+			  document.querySelector('#lap').prepend(lapElement);  // 先頭に追加
+			  laptimeArea.hidden = false;
+			});
+		</script>
+    </body>
+</html>

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini 画像・カメラ文字起こし</title>
+    <!-- Tailwind CSSを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter) を読み込み -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #09f; animation: spin 1s linear infinite; }
+        .custom-file-upload { border: 2px solid #3b82f6; display: inline-block; padding: 8px 12px; cursor: pointer; border-radius: 8px; color: #3b82f6; font-weight: 500; transition: all 0.2s; }
+        .custom-file-upload:hover { background-color: #3b82f6; color: white; }
+        .drop-zone.drag-over { border-color: #3b82f6; background-color: #eff6ff; }
+        #video-container {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background-color: #000;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            position: relative;
+            cursor: grab;
+        }
+        #video-container:active {
+            cursor: grabbing;
+        }
+        #video-stream { 
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.3s ease-out;
+            transform-origin: center center; /* 回転の中心を中央に */
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex items-center justify-center min-h-screen py-8">
+    <div class="container mx-auto p-4 md:p-8 max-w-2xl w-full">
+        <div class="bg-white rounded-2xl shadow-lg p-6 md:p-10">
+            
+            <div class="text-center mb-8">
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-900">画像・カメラ文字起こし AI</h1>
+                <p class="mt-2 text-gray-500">Gemini APIで画像やカメラ映像からテキストを抽出</p>
+            </div>
+
+            <!-- モード切り替えタブ -->
+            <div class="flex border-b mb-6">
+                <button id="tab-file" class="flex-1 py-2 text-center font-semibold text-blue-600 border-b-2 border-blue-600">ファイル</button>
+                <button id="tab-camera" class="flex-1 py-2 text-center font-semibold text-gray-500">カメラ</button>
+            </div>
+
+            <!-- ファイル入力モード -->
+            <div id="file-mode-content">
+                <div id="drop-zone" class="mb-6 border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center transition-colors duration-200 cursor-pointer">
+                    <label for="image-upload" class="custom-file-upload">画像を選択</label>
+                    <input id="image-upload" type="file" accept="image/*" class="hidden">
+                    <p class="text-gray-500 text-sm mt-3">または、ここにファイルをドラッグ＆ドロップ</p>
+                    <p id="file-name" class="text-center text-sm text-gray-500 mt-2">まだ画像が選択されていません</p>
+                </div>
+                <div id="image-preview-container" class="mb-6 hidden bg-gray-100 rounded-lg p-4">
+                    <img id="image-preview" src="#" alt="選択された画像のプレビュー" class="max-w-full max-h-64 mx-auto rounded-md object-contain">
+                </div>
+                <div class="text-center">
+                    <button id="transcribe-file-button" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed w-full md:w-auto" disabled>
+                        文字起こしを実行
+                    </button>
+                </div>
+            </div>
+            
+            <!-- カメラ入力モード -->
+            <div id="camera-mode-content" class="hidden">
+                <div id="video-container">
+                    <video id="video-stream" autoplay playsinline></video>
+                </div>
+                <canvas id="capture-canvas" class="hidden"></canvas>
+                 <div id="camera-message" class="text-center text-gray-500 my-4"></div>
+                 <div class="space-y-3 mb-4">
+                    <div class="hidden" id="camera-select-container">
+                        <label for="camera-select" class="block text-sm font-medium text-gray-700 mb-1">カメラを選択:</label>
+                        <select id="camera-select" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"></select>
+                    </div>
+                    <div class="hidden" id="resolution-select-container">
+                        <label for="resolution-select" class="block text-sm font-medium text-gray-700 mb-1">解像度:</label>
+                        <select id="resolution-select" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5">
+                            <option value="">自動</option>
+                            <option value="3840,2160">4K (3840x2160)</option>
+                            <option value="1920,1080">Full HD (1920x1080)</option>
+                            <option value="1280,720">HD (1280x720)</option>
+                            <option value="640,480">VGA (640x480)</option>
+                        </select>
+                    </div>
+                    <div class="hidden" id="zoom-controls-container">
+                        <label for="zoom-slider" class="block text-sm font-medium text-gray-700 mb-1">ズーム: <span id="zoom-label">100%</span></label>
+                        <input id="zoom-slider" type="range" min="100" max="1600" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                </div>
+                <div id="camera-controls" class="text-center space-y-3 md:space-y-0 md:space-x-3 flex flex-wrap justify-center items-center gap-3">
+                    <button id="start-camera-button" class="bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-green-700 transition-all">カメラを起動</button>
+                    <button id="capture-button" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 transition-all hidden">キャプチャして解析</button>
+                    <button id="rotate-camera-button" class="bg-gray-500 text-white font-bold p-3 rounded-lg shadow-md hover:bg-gray-600 transition-all hidden" title="カメラを90度回転">
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 3a12 12 0 11-12.75 9M21 9h-6V3" />
+                        </svg>
+                    </button>
+                    <button id="stop-camera-button" class="bg-red-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-red-700 transition-all hidden">カメラを停止</button>
+                </div>
+            </div>
+
+            <!-- 共通エリア -->
+            <div class="mt-8">
+                <label for="prompt-input" class="block text-lg font-semibold mb-2 text-gray-700">AIへの指示 (プロンプト):</label>
+                <textarea id="prompt-input" rows="3" class="w-full bg-gray-50 rounded-lg p-3 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                >この画像から日本語のテキストを正確に、改行も含めて全て抽出してください。</textarea>
+            </div>
+
+            <div id="loader" class="flex justify-center my-4 hidden"><div class="spinner"></div></div>
+
+            <div class="mt-6">
+                 <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-xl font-semibold text-gray-700">抽出結果:</h2>
+                    <button id="copy-button" class="bg-gray-200 text-gray-600 hover:bg-gray-300 text-sm font-medium py-1 px-3 rounded-lg flex items-center transition-colors disabled:opacity-50" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        <span id="copy-button-text">コピー</span>
+                    </button>
+                </div>
+                <div class="bg-gray-100 rounded-lg p-4 min-h-[150px] whitespace-pre-wrap text-gray-800" id="result-text">ここに抽出されたテキストが表示されます。</div>
+            </div>
+        </div>
+        <footer class="text-center mt-6 text-sm text-gray-400">Powered by Google Gemini API</footer>
+    </div>
+
+    <script>
+        document.oncontextmenu = function () {
+        	return false;
+        }
+        const elements = {
+            tabFile: document.getElementById('tab-file'),
+            tabCamera: document.getElementById('tab-camera'),
+            fileMode: document.getElementById('file-mode-content'),
+            cameraMode: document.getElementById('camera-mode-content'),
+            imageUpload: document.getElementById('image-upload'),
+            imagePreview: document.getElementById('image-preview'),
+            imagePreviewContainer: document.getElementById('image-preview-container'),
+            transcribeFileButton: document.getElementById('transcribe-file-button'),
+            resultText: document.getElementById('result-text'),
+            loader: document.getElementById('loader'),
+            fileNameDisplay: document.getElementById('file-name'),
+            dropZone: document.getElementById('drop-zone'),
+            promptInput: document.getElementById('prompt-input'),
+            copyButton: document.getElementById('copy-button'),
+            copyButtonText: document.getElementById('copy-button-text'),
+            videoContainer: document.getElementById('video-container'),
+            videoStream: document.getElementById('video-stream'),
+            canvas: document.getElementById('capture-canvas'),
+            startCameraButton: document.getElementById('start-camera-button'),
+            stopCameraButton: document.getElementById('stop-camera-button'),
+            captureButton: document.getElementById('capture-button'),
+            rotateCameraButton: document.getElementById('rotate-camera-button'),
+            cameraMessage: document.getElementById('camera-message'),
+            cameraSelectContainer: document.getElementById('camera-select-container'),
+            cameraSelect: document.getElementById('camera-select'),
+            resolutionSelectContainer: document.getElementById('resolution-select-container'),
+            resolutionSelect: document.getElementById('resolution-select'),
+            zoomControlsContainer: document.getElementById('zoom-controls-container'),
+            zoomSlider: document.getElementById('zoom-slider'),
+            zoomLabel: document.getElementById('zoom-label'),
+        };
+
+        let currentStream;
+        let currentRotation = 0;
+        let zoomState = {
+            scale: 1,
+            panX: 0,
+            panY: 0,
+            isDragging: false,
+            startX: 0,
+            startY: 0
+        };
+        const initialResultText = 'ここに抽出されたテキストが表示されます。';
+
+        // --- モード切り替え ---
+        elements.tabFile.addEventListener('click', () => switchMode('file'));
+        elements.tabCamera.addEventListener('click', () => switchMode('camera'));
+
+        function switchMode(mode) {
+            if (mode === 'file') {
+                elements.tabFile.classList.add('text-blue-600', 'border-blue-600');
+                elements.tabFile.classList.remove('text-gray-500');
+                elements.tabCamera.classList.add('text-gray-500');
+                elements.tabCamera.classList.remove('text-blue-600', 'border-blue-600');
+                elements.fileMode.classList.remove('hidden');
+                elements.cameraMode.classList.add('hidden');
+                stopCamera();
+            } else {
+                elements.tabCamera.classList.add('text-blue-600', 'border-blue-600');
+                elements.tabCamera.classList.remove('text-gray-500');
+                elements.tabFile.classList.add('text-gray-500');
+                elements.tabFile.classList.remove('text-blue-600', 'border-blue-600');
+                elements.cameraMode.classList.remove('hidden');
+                elements.fileMode.classList.add('hidden');
+            }
+        }
+
+        // --- 共通関数 ---
+        function displayResult(text) {
+            elements.resultText.textContent = text;
+            const canCopy = text && text !== initialResultText && !text.startsWith('エラー');
+            elements.copyButton.disabled = !canCopy;
+        }
+
+        async function analyzeImage(base64Image, mimeType) {
+            const apiKey = "AIzaSyAoH1tcwvHjaLjQPFNACHFFyD8JN-UDtQ0"; // Canvas環境ではAPIキーは不要です
+             if (!apiKey && window.location.hostname !== "scf.usercontent.goog" ) {
+                displayResult('エラー: APIキーが設定されていません。コードを編集してAPIキーを設定してください。');
+                return;
+            }
+
+            elements.loader.classList.remove('hidden');
+            displayResult('AIがテキストを抽出中です...');
+            elements.copyButton.disabled = true;
+
+            try {
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                const userPrompt = elements.promptInput.value;
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: userPrompt },
+                            { inlineData: { mimeType, data: base64Image } }
+                        ]
+                    }]
+                };
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`APIエラー: ${response.status} ${response.statusText}. 詳細: ${JSON.stringify(errorData.error)}`);
+                }
+
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) {
+                    displayResult(text);
+                } else {
+                    displayResult('テキストを抽出できませんでした。');
+                }
+            } catch (error) {
+                console.error('エラー:', error);
+                displayResult(`エラーが発生しました: ${error.message}`);
+            } finally {
+                elements.loader.classList.add('hidden');
+            }
+        }
+        
+        // --- ファイルモード関連 ---
+        function handleFile(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                elements.fileNameDisplay.textContent = '画像ファイルを選択してください。';
+                elements.imagePreview.src = '#';
+                elements.imagePreviewContainer.classList.add('hidden');
+                elements.transcribeFileButton.disabled = true;
+                return;
+            }
+            elements.fileNameDisplay.textContent = `選択中のファイル: ${file.name}`;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                elements.imagePreview.src = e.target.result;
+                elements.imagePreviewContainer.classList.remove('hidden');
+                elements.transcribeFileButton.disabled = false;
+                displayResult('「文字起こしを実行」ボタンを押してください。');
+            };
+            reader.readAsDataURL(file);
+        }
+        elements.imageUpload.addEventListener('change', (e) => e.target.files.length && handleFile(e.target.files[0]));
+        elements.dropZone.addEventListener('click', () => elements.imageUpload.click());
+        elements.dropZone.querySelector('label').addEventListener('click', (e) => e.stopPropagation());
+        ['dragover', 'dragleave', 'drop'].forEach(eventName => {
+            elements.dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (eventName === 'dragover') elements.dropZone.classList.add('drag-over');
+                else elements.dropZone.classList.remove('drag-over');
+                if (eventName === 'drop') handleFile(e.dataTransfer.files[0]);
+            });
+        });
+        elements.transcribeFileButton.addEventListener('click', () => {
+            if (!elements.imagePreview.src || elements.imagePreview.src.startsWith('http')) return;
+            const base64Image = elements.imagePreview.src.split(',')[1];
+            const mimeType = elements.imagePreview.src.match(/data:(.*);/)[1];
+            analyzeImage(base64Image, mimeType);
+            elements.transcribeFileButton.disabled = true;
+        });
+
+        // --- カメラモード関連 ---
+        async function getCamerasAndStart() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                elements.cameraMessage.textContent = 'カメラデバイスの取得機能がサポートされていません。';
+                return;
+            }
+            stopCamera();
+            while (elements.cameraSelect.firstChild) {
+                elements.cameraSelect.removeChild(elements.cameraSelect.firstChild);
+            }
+            try {
+                const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                tempStream.getTracks().forEach(track => track.stop());
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+                if (videoDevices.length === 0) {
+                    elements.cameraMessage.textContent = '利用可能なカメラが見つかりませんでした。';
+                    return;
+                }
+                
+                videoDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.textContent = device.label || `カメラ ${elements.cameraSelect.length + 1}`;
+                    elements.cameraSelect.appendChild(option);
+                });
+
+                if (videoDevices.length > 1) {
+                    elements.cameraSelectContainer.classList.remove('hidden');
+                }
+                
+                elements.resolutionSelectContainer.classList.remove('hidden');
+                elements.zoomControlsContainer.classList.remove('hidden');
+                await startStream();
+
+            } catch (err) {
+                console.error("カメラの取得に失敗:", err);
+                elements.cameraMessage.textContent = 'カメラの起動に失敗しました。アクセスを許可してください。';
+            }
+        }
+
+        async function startStream() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            const deviceId = elements.cameraSelect.value;
+            const resolutionValue = elements.resolutionSelect.value;
+            let resolution = {};
+            
+            if (resolutionValue) {
+                const [width, height] = resolutionValue.split(',');
+                resolution = {
+                    width: { ideal: parseInt(width) },
+                    height: { ideal: parseInt(height) }
+                };
+            } else {
+                // 「自動」が選択された場合、4K解像度を試す
+                resolution = {
+                    width: { ideal: 3840 },
+                    height: { ideal: 2160 }
+                };
+            }
+
+            const constraints = {
+                video: { deviceId: deviceId ? { exact: deviceId } : undefined, ...resolution }
+            };
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                elements.videoStream.srcObject = currentStream;
+                elements.videoStream.onloadedmetadata = () => {
+                   elements.cameraMessage.textContent = `解像度: ${elements.videoStream.videoWidth}x${elements.videoStream.videoHeight}`;
+                };
+                elements.startCameraButton.classList.add('hidden');
+                elements.captureButton.classList.remove('hidden');
+                elements.rotateCameraButton.classList.remove('hidden');
+                elements.stopCameraButton.classList.remove('hidden');
+                resetZoomAndPan();
+            } catch(err) {
+                 console.error("ストリームの開始に失敗:", err);
+                elements.cameraMessage.textContent = 'カメラのストリームを開始できませんでした。';
+            }
+        }
+
+        function stopCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            elements.videoStream.srcObject = null;
+            elements.startCameraButton.classList.remove('hidden');
+            elements.captureButton.classList.add('hidden');
+            elements.rotateCameraButton.classList.add('hidden');
+            elements.stopCameraButton.classList.add('hidden');
+            elements.cameraSelectContainer.classList.add('hidden');
+            elements.resolutionSelectContainer.classList.add('hidden');
+            elements.zoomControlsContainer.classList.add('hidden');
+            elements.cameraMessage.textContent = '';
+            resetZoomAndPan();
+        }
+
+        // --- ズーム＆パン機能 ---
+        function updateVideoTransform() {
+            elements.videoStream.style.transform = `translate(${zoomState.panX}px, ${zoomState.panY}px) scale(${zoomState.scale}) rotate(${currentRotation}deg)`;
+        }
+
+        function resetZoomAndPan() {
+            currentRotation = 0;
+            zoomState = { scale: 1, panX: 0, panY: 0, isDragging: false, startX: 0, startY: 0 };
+            elements.zoomSlider.value = 100;
+            elements.zoomLabel.textContent = '100%';
+            updateVideoTransform();
+        }
+
+        elements.zoomSlider.addEventListener('input', (e) => {
+            const newScale = parseInt(e.target.value) / 100;
+            elements.zoomLabel.textContent = `${e.target.value}%`;
+
+            const oldScale = zoomState.scale;
+            const scaleRatio = newScale / oldScale;
+
+            zoomState.panX *= scaleRatio;
+            zoomState.panY *= scaleRatio;
+            
+            zoomState.scale = newScale;
+            
+            clampPan();
+            updateVideoTransform();
+        });
+
+        function clampPan() {
+            const videoEl = elements.videoStream;
+            const containerEl = elements.videoContainer;
+            
+            const scaledWidth = videoEl.offsetWidth * zoomState.scale;
+            const scaledHeight = videoEl.offsetHeight * zoomState.scale;
+            
+            const extraWidth = scaledWidth > containerEl.offsetWidth ? (scaledWidth - containerEl.offsetWidth) / 2 : 0;
+            const extraHeight = scaledHeight > containerEl.offsetHeight ? (scaledHeight - containerEl.offsetHeight) / 2 : 0;
+            
+            zoomState.panX = Math.max(Math.min(zoomState.panX, extraWidth), -extraWidth);
+            zoomState.panY = Math.max(Math.min(zoomState.panY, extraHeight), -extraHeight);
+        }
+
+        elements.videoContainer.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            zoomState.isDragging = true;
+            zoomState.startX = e.clientX - zoomState.panX;
+            zoomState.startY = e.clientY - zoomState.panY;
+            elements.videoContainer.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (zoomState.isDragging) {
+                zoomState.isDragging = false;
+                elements.videoContainer.style.cursor = 'grab';
+            }
+        });
+        
+        window.addEventListener('mousemove', (e) => {
+            if (!zoomState.isDragging) return;
+            e.preventDefault();
+            zoomState.panX = e.clientX - zoomState.startX;
+            zoomState.panY = e.clientY - zoomState.startY;
+            clampPan();
+            updateVideoTransform();
+        });
+
+        // --- キャプチャと回転機能 ---
+        elements.cameraSelect.addEventListener('change', startStream);
+        elements.resolutionSelect.addEventListener('change', startStream);
+        elements.rotateCameraButton.addEventListener('click', () => {
+            currentRotation = (currentRotation + 90) % 360;
+            updateVideoTransform();
+        });
+        
+        function captureImage() {
+            const video = elements.videoStream;
+            const canvas = elements.canvas;
+            const ctx = canvas.getContext('2d');
+            const container = elements.videoContainer;
+
+            const videoPixelWidth = video.videoWidth;
+            const videoPixelHeight = video.videoHeight;
+            
+            const sWidth = videoPixelWidth / zoomState.scale;
+            const sHeight = videoPixelHeight / zoomState.scale;
+            
+            const panXInVideoPixels = zoomState.panX * (videoPixelWidth / container.clientWidth);
+            const panYInVideoPixels = zoomState.panY * (videoPixelHeight / container.clientHeight);
+            
+            const sx = (videoPixelWidth - sWidth) / 2 - panXInVideoPixels;
+            const sy = (videoPixelHeight - sHeight) / 2 - panYInVideoPixels;
+
+            const rotated = currentRotation % 180 !== 0;
+            canvas.width = rotated ? container.clientHeight : container.clientWidth;
+            canvas.height = rotated ? container.clientWidth : container.clientHeight;
+
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(currentRotation * Math.PI / 180);
+
+            const destWidth = rotated ? canvas.height : canvas.width;
+            const destHeight = rotated ? canvas.width : canvas.height;
+
+            ctx.drawImage(
+                video,
+                sx, sy, sWidth, sHeight,
+                -destWidth / 2, -destHeight / 2,
+                destWidth, destHeight
+            );
+            
+            ctx.restore();
+
+            const base64Image = canvas.toDataURL('image/png').split(',')[1];
+            analyzeImage(base64Image, 'image/png');
+        }
+
+        elements.startCameraButton.addEventListener('click', getCamerasAndStart);
+        elements.stopCameraButton.addEventListener('click', stopCamera);
+        elements.captureButton.addEventListener('click', captureImage);
+
+        // --- コピーボタン ---
+        elements.copyButton.addEventListener('click', () => {
+            if (!navigator.clipboard || !elements.resultText.textContent) return;
+            navigator.clipboard.writeText(elements.resultText.textContent).then(() => {
+                const originalText = elements.copyButtonText.textContent;
+                const originalSvg = elements.copyButton.querySelector('svg').innerHTML;
+                elements.copyButton.querySelector('svg').innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />`;
+                elements.copyButtonText.textContent = 'コピーしました！';
+                elements.copyButton.classList.add('bg-green-200', 'text-green-800');
+                setTimeout(() => {
+                    elements.copyButtonText.textContent = originalText;
+                    elements.copyButton.querySelector('svg').innerHTML = originalSvg;
+                    elements.copyButton.classList.remove('bg-green-200', 'text-green-800');
+                }, 2000);
+            }).catch(err => console.error('コピーに失敗:', err));
+        });
+    </script>
+</body>
+</html>

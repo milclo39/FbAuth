@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>メインページ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+		.btn {
+		  display: inline-block;
+		  padding: 0.3em 1em;
+		  text-decoration: none;
+		  color: #67c5ff;
+		  border: solid 2px #67c5ff;
+		  border-radius: 3px;
+		  transition: .4s;
+		}
+
+		.btn:hover {
+		  background: #67c5ff;
+		  color: white;
+		}
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-lg text-center bg-white rounded-lg shadow-md p-8">
+        <!--h1 class="text-3xl font-bold text-gray-800 mb-4">ようこそ！</h1-->
+        <p id="welcome-message" class="text-gray-600 mb-6">ログイン情報を確認しています...</p>
+        <button id="logout-button-main" class="w-full max-w-xs mx-auto flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+            ログアウト
+        </button>
+		<br>
+        <a href="./tools/download.html" class="btn"><button>Download</button></a>
+        <a href="./tools/drawing.html" class="btn"><button>お絵描き</button></a>
+        <a href="./tools/fablicdraw.html" class="btn"><button>図形描画</button></a>
+        <a href="./tools/firechat.html" class="btn"><button>チャット</button></a>
+		<br><br>
+        <a href="./tools/firemovie.html" class="btn"><button>Fire動画</button></a>
+        <a href="./tools/imageview.html" class="btn"><button>画像表示</button></a>
+        <a href="./tools/ocr.html" class="btn"><button>文字認識</button></a>
+        <a href="./tools/pdfmerge.html" class="btn"><button>PDF結合</button></a>
+		<br><br>
+        <a href="./tools/player.html" class="btn"><button>動画再生</button></a>
+        <a href="./tools/rotation.html" class="btn"><button>画像回転</button></a>
+        <a href="./tools/terms.html" class="btn"><button>利用規約</button></a>
+        <a href="./tools/transcription.html" class="btn"><button>文字読取</button></a>
+    </div>
+
+    <!-- Firebase SDKの読み込み -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // index.html と同じFirebase設定を使用します
+        const firebaseConfig = {
+            apiKey: "AIzaSyCjsA2sYDk5pyXw_qmwSqDkK6jcijVwjhw",
+            authDomain: "miclosoft.firebaseapp.com",
+            projectId: "miclosoft",
+            storageBucket: "miclosoft.firebasestorage.app",
+            messagingSenderId: "647566802317",
+            appId: "1:647566802317:web:9efd03242f25b76babd1c4"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const welcomeMessage = document.getElementById('welcome-message');
+        const logoutButtonMain = document.getElementById('logout-button-main');
+
+        // 認証状態を監視し、ページへのアクセスを制御します
+        onAuthStateChanged(auth, (user) => {
+            // ユーザーがログインしており、かつメールアドレスが確認済みの場合のみページを表示
+            if (user && user.emailVerified) {
+                console.log("User is logged in and verified:", user.email);
+                welcomeMessage.textContent = `ログインに成功しました。 (${user.email})`;
+            } else {
+                // ユーザーがログインしていない、またはメールが未確認の場合、ログインページにリダイレクト
+                console.log("User is not logged in or email is not verified. Redirecting...");
+                // 未確認のユーザーセッションが残っている可能性を考慮し、念のためログアウト処理を実行
+                if (user) {
+                    signOut(auth);
+                }
+                window.location.href = 'index.html';
+            }
+        });
+
+        // ログアウトボタンの処理
+        logoutButtonMain.addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                console.log('Logged out successfully');
+                // onAuthStateChangedがリダイレクトを処理します
+            } catch (error) {
+                console.error('Logout Error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
+

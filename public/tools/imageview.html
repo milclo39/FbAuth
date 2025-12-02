@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画像ビューア</title>
+    <style>
+        /* 基本スタイルとダークテーマ */
+        :root {
+            --bg-color: #121212;
+            --primary-text-color: #e0e0e0;
+            --secondary-text-color: #b3b3b3;
+            --surface-color: #1e1e1e;
+            --border-color: #2c2c2c;
+            --accent-color: #bb86fc;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--primary-text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        /* ドラッグ＆ドロップエリア */
+        #drop-zone {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border: 3px dashed var(--border-color);
+            box-sizing: border-box;
+            transition: background-color 0.3s, border-color 0.3s;
+            z-index: 100;
+        }
+
+        #drop-zone.drag-over {
+            background-color: rgba(187, 134, 252, 0.1);
+            border-color: var(--accent-color);
+        }
+        
+        #drop-zone.hidden {
+            display: none;
+        }
+
+        #drop-zone p {
+            font-size: 1.5rem;
+            color: var(--secondary-text-color);
+            text-align: center;
+            pointer-events: none; /* テキストがドラッグイベントを妨げないようにする */
+        }
+        
+        .icon-folder {
+            font-size: 5rem;
+            color: var(--secondary-text-color);
+            margin-bottom: 20px;
+            pointer-events: none;
+        }
+
+        /* サムネイルグリッド */
+        #thumbnail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            padding: 20px;
+        }
+
+        /* サムネイルアイテム */
+        .thumbnail-item {
+            background-color: var(--surface-color);
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .thumbnail-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .thumbnail-item img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover; /* 画像のアスペクト比を保ちつつコンテナを埋める */
+            display: block;
+            background-color: #000;
+        }
+
+        .thumbnail-item p {
+            margin: 0;
+            padding: 8px 10px;
+            font-size: 0.8rem;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis; /* ファイル名が長い場合に省略記号を表示 */
+            background-color: var(--surface-color);
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* 拡大表示モーダル */
+        #modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: none; /* 通常は非表示 */
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            backdrop-filter: blur(5px);
+        }
+        
+        #modal-overlay.visible {
+            display: flex;
+        }
+
+        #modal-image {
+            max-width: 90vw;
+            max-height: 85vh;
+            border-radius: 8px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
+        }
+        
+        #modal-filename {
+            position: absolute;
+            bottom: 20px;
+            color: var(--primary-text-color);
+            background-color: rgba(0,0,0,0.5);
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 1rem;
+        }
+
+        /* ローディングインジケーター */
+        #loader {
+            width: 100%;
+            text-align: center;
+            padding: 20px;
+            display: none; /* 通常は非表示 */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ドラッグ＆ドロップエリア -->
+    <div id="drop-zone">
+        <div class="icon-folder">📁</div>
+        <p>ここに画像フォルダをドラッグ＆ドロップしてください</p>
+    </div>
+
+    <!-- サムネイル表示エリア -->
+    <div id="thumbnail-grid"></div>
+    
+    <!-- ローディング表示 -->
+    <div id="loader">読み込み中...</div>
+
+    <!-- 拡大表示用モーダル -->
+    <div id="modal-overlay">
+        <img id="modal-image" src="" alt="拡大画像">
+        <p id="modal-filename"></p>
+    </div>
+
+    <script>
+        // DOM要素の取得
+        const dropZone = document.getElementById('drop-zone');
+        const thumbnailGrid = document.getElementById('thumbnail-grid');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalImage = document.getElementById('modal-image');
+        const modalFilename = document.getElementById('modal-filename');
+        const loader = document.getElementById('loader');
+
+        // アプリケーションの状態管理
+        let allImageFiles = [];
+        let currentIndex = 0;
+        const IMAGES_PER_PAGE = 30; // 一度に読み込む画像数
+        const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i;
+
+        // --- ドラッグ＆ドロップイベント ---
+
+        // エリア内にドラッグされたとき
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault(); // デフォルトの動作（ファイルを開くなど）を無効化
+            e.stopPropagation();
+            dropZone.classList.add('drag-over');
+        });
+
+        // エリア外にドラッグが移動したとき
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('drag-over');
+        });
+
+        // エリア内でドロップされたとき
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('drag-over');
+            
+            const items = e.dataTransfer.items;
+            if (items && items.length > 0) {
+                const entry = items[0].webkitGetAsEntry();
+                if (entry.isDirectory) {
+                    resetViewer();
+                    dropZone.classList.add('hidden'); // ドロップゾーンを非表示
+                    loader.style.display = 'block';
+                    processDirectory(entry);
+                } else {
+                    alert('フォルダをドロップしてください。');
+                }
+            }
+        });
+        
+        // --- 画像処理と表示 ---
+
+        // ビューアの状態をリセット
+        function resetViewer() {
+            allImageFiles = [];
+            currentIndex = 0;
+            thumbnailGrid.innerHTML = '';
+        }
+
+        // ディレクトリ内のファイルを再帰的に処理
+        async function processDirectory(dirEntry) {
+            const dirReader = dirEntry.createReader();
+            let entries = [];
+            let readEntries = await new Promise((resolve) => {
+                dirReader.readEntries(resolve);
+            });
+            while (readEntries.length > 0) {
+                entries = entries.concat(readEntries);
+                readEntries = await new Promise((resolve) => {
+                    dirReader.readEntries(resolve);
+                });
+            }
+
+            for (const entry of entries) {
+                if (entry.isDirectory) {
+                    // サブフォルダも再帰的に探索
+                    await processDirectory(entry);
+                } else if (entry.isFile && IMAGE_EXTENSIONS.test(entry.name)) {
+                    // ファイルの場合、Fileオブジェクトを取得してリストに追加
+                    const file = await new Promise(resolve => entry.file(resolve));
+                    allImageFiles.push(file);
+                }
+            }
+
+            // 初回の画像読み込みを開始
+            if (currentIndex === 0 && allImageFiles.length > 0) {
+                loader.style.display = 'none';
+                loadMoreImages();
+            } else if (allImageFiles.length === 0) {
+                loader.style.display = 'none';
+                alert('フォルダ内に対応する画像ファイルが見つかりませんでした。');
+                dropZone.classList.remove('hidden');
+            }
+        }
+
+        // サムネイルを生成してグリッドに追加
+        function createThumbnail(file) {
+            const item = document.createElement('div');
+            item.className = 'thumbnail-item';
+
+            const img = document.createElement('img');
+            // createObjectURLで軽量に画像を表示
+            const objectURL = URL.createObjectURL(file);
+            img.src = objectURL;
+            img.alt = file.name;
+            // メモリリークを防ぐため、画像の読み込みが終わったらURLを解放
+            img.onload = () => {
+                URL.revokeObjectURL(objectURL);
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(objectURL);
+                item.remove(); // 読み込み失敗した要素は削除
+            }
+
+            const p = document.createElement('p');
+            p.textContent = file.name;
+
+            item.appendChild(img);
+            item.appendChild(p);
+
+            // クリックで拡大表示
+            item.addEventListener('click', () => {
+                showModal(file);
+            });
+
+            thumbnailGrid.appendChild(item);
+        }
+
+        // --- 無限スクロール ---
+        
+        // Intersection Observerのセットアップ
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                loadMoreImages();
+            }
+        }, { rootMargin: "200px" }); // 画面下200pxまで来たら読み込み開始
+
+        // 画像をさらに読み込む
+        function loadMoreImages() {
+            if (currentIndex >= allImageFiles.length) {
+                observer.unobserve(loader); // 全て読み込んだら監視を停止
+                loader.style.display = 'none';
+                return;
+            }
+            
+            loader.style.display = 'block';
+            
+            const fragment = document.createDocumentFragment();
+            const nextIndex = Math.min(currentIndex + IMAGES_PER_PAGE, allImageFiles.length);
+            
+            for (let i = currentIndex; i < nextIndex; i++) {
+                createThumbnail(allImageFiles[i]);
+            }
+            
+            currentIndex = nextIndex;
+
+            // 全て読み込んでいなければ、再度ローダーを監視対象にする
+            if (currentIndex < allImageFiles.length) {
+                 observer.observe(loader);
+            } else {
+                 observer.unobserve(loader);
+                 loader.style.display = 'none';
+            }
+        }
+        
+        // --- モーダル表示 ---
+
+        // モーダルを表示
+        function showModal(file) {
+            modalImage.src = URL.createObjectURL(file);
+            modalFilename.textContent = file.name;
+            modalOverlay.classList.add('visible');
+            // スクロールを無効化
+            document.body.style.overflow = 'hidden';
+        }
+        
+        // モーダルを非表示
+        function hideModal() {
+            // メモリリーク防止
+            if (modalImage.src) {
+                URL.revokeObjectURL(modalImage.src);
+                modalImage.src = "";
+            }
+            modalOverlay.classList.remove('visible');
+            // スクロールを有効化
+            document.body.style.overflow = '';
+        }
+
+        // モーダルの背景クリックで閉じる
+        modalOverlay.addEventListener('click', (e) => {
+            // 画像自体をクリックした場合は閉じない
+            if (e.target === modalOverlay) {
+                hideModal();
+            }
+        });
+        
+        // Escapeキーで閉じる
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalOverlay.classList.contains('visible')) {
+                hideModal();
+            }
+        });
+
+    </script>
+</body>
+</html>

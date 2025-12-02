@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アプリケーションダウンローダー</title>
+    <!-- Tailwind CSSを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter) を読み込み -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* 日本語はNoto Sans JP、それ以外はInterを適用 */
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen py-8">
+
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-lg m-4">
+        
+        <!-- バナー画像 -->
+        <img src="banner.jpg" 
+             alt="アプリケーションバナー" 
+             class="w-full h-auto rounded-t-xl object-cover"
+             onerror="this.onerror=null;this.src='https://placehold.co/1000x400/e2e8f0/4a5568?text=DownloadSite';">
+
+        <!-- コンテンツ部分をdivで囲み、パディングを適用 -->
+        <div class="p-8">
+            <!-- ヘッダー -->
+            <div class="text-center mb-8">
+                <h1 id="app-title" class="text-3xl font-bold text-gray-800"></h1>
+                <p id="app-description" class="mt-2 text-gray-600"></p>
+            </div>
+
+            <!-- 注意事項 -->
+            <div class="mb-6">
+                <h2 id="terms-title" class="text-xl font-semibold text-gray-700 mb-3"></h2>
+                <div id="terms-container" class="w-full h-48 bg-gray-50 border border-gray-300 rounded-lg p-4 text-sm text-gray-700 overflow-y-auto" style="white-space: pre-line;">
+                    <!-- 注意事項のテキストはJSで挿入されます -->
+                </div>
+            </div>
+
+            <!-- 同意チェックボックス -->
+            <div class="flex items-center mb-8">
+                <input type="checkbox" id="agree-checkbox" class="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                <label for="agree-checkbox" id="agree-label" class="ml-3 block text-sm font-medium text-gray-700"></label>
+            </div>
+
+            <!-- ★修正: ダウンロードボタン群 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button id="download-win-btn" disabled class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300"></button>
+                <button id="download-mac-btn" disabled class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300"></button>
+                <button id="download-pdf-btn" disabled class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300"></button>
+            </div>
+
+            <!-- メッセージ表示エリア -->
+            <div id="message-area" class="mt-6 text-center text-sm h-5"></div>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-database-compat.min.js"></script>
+    <script type="module">
+        // Firebase モジュールをインポート
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getStorage, ref as stref, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+        // =================================================================
+        // ▼▼▼ あなたのFirebaseプロジェクトの設定情報をここに貼り付けてください ▼▼▼
+        // =================================================================
+        const firebaseConfig = {
+			apiKey: "AIzaSyDigZYOvi4pz9UPh4kl8qZKuKbC9rWAHFU",
+			authDomain: "edl-xp.firebaseapp.com",
+            databaseURL: "https://edl-xp-default-rtdb.firebaseio.com",
+			projectId: "edl-xp",
+			storageBucket: "edl-xp.appspot.com",
+			messagingSenderId: "820917733972",
+			appId: "1:820917733972:web:2063c5c6bafa9a9554bbc1"
+        };
+        // =================================================================
+
+        // ★修正: 表示テキストの多言語対応
+        const translations = {
+            ja: {
+                appTitle: "アプリケーションダウンローダー",
+                appDescription: "これはサンプルのアプリケーションです。最新の機能と安定したパフォーマンスを提供します。",
+                termsTitle: "ダウンロードデータ取扱上のご注意",
+                termsContent: `1. 本ソフトウェアの著作権は、開発者に帰属します。
+							2. 本ソフトウェアを無断で複製、改変、再配布することを禁じます。
+							3. 本ソフトウェアの使用により生じたいかなる損害についても、開発者は一切の責任を負いません。
+							4. ウイルス対策ソフトでスキャンしてから実行することを推奨します。
+							5. このファイルは「application.msi」としてダウンロードされます。
+							6. ご利用の環境によっては、正常に動作しない可能性があります。
+							7. 仕様は予告なく変更されることがあります。
+							8. サポートは提供しておりません。
+							9. 商用利用は別途お問い合わせください。
+							10. 全ての条項に同意した上でご利用ください。`,
+                agreeLabel: "上記のご注意に同意します。",
+                downloadButtonWin: "Windows版をダウンロード",
+                downloadButtonMac: "macOS版をダウンロード",
+                downloadButtonPdf: "取扱説明書をダウンロード",
+                pleaseAgree: "ダウンロードするには、ご注意に同意してください。",
+                downloading: "ダウンロード準備中...",
+                error: "エラーが発生しました。時間をおいて再度お試しください。"
+            },
+            en: {
+                appTitle: "Application Downloader",
+                appDescription: "This is a sample application. It provides the latest features and stable performance.",
+                termsTitle: "Precautions for Handling Downloaded Data",
+                termsContent: `1. The copyright of this software belongs to the developer.
+							2. Unauthorized reproduction, modification, or redistribution of this software is prohibited.
+							3. The developer assumes no responsibility for any damages caused by the use of this software.
+							4. It is recommended to scan with antivirus software before execution.
+							5. This file will be downloaded as "application.msi".
+							6. It may not operate correctly depending on your environment.
+							7. Specifications are subject to change without notice.
+							8. Support is not provided.
+							9. For commercial use, please contact us separately.
+							10. Please use after agreeing to all terms.`,
+                agreeLabel: "I agree to the above precautions.",
+                downloadButtonWin: "Download for Windows",
+                downloadButtonMac: "Download for macOS",
+                downloadButtonPdf: "Download Manual",
+                pleaseAgree: "Please agree to the precautions to download.",
+                downloading: "Preparing download...",
+                error: "An error occurred. Please try again later."
+            }
+        };
+
+        // DOM要素を取得
+        const agreeCheckbox = document.getElementById('agree-checkbox');
+        const downloadWinBtn = document.getElementById('download-win-btn');
+        const downloadMacBtn = document.getElementById('download-mac-btn');
+        const downloadPdfBtn = document.getElementById('download-pdf-btn');
+        const messageArea = document.getElementById('message-area');
+        const allButtons = [downloadWinBtn, downloadMacBtn, downloadPdfBtn];
+
+        // ブラウザの言語設定を取得
+        const lang = navigator.language.split('-')[0];
+        const t = translations[lang] || translations.en;
+
+        /**
+         * UIのテキストを言語に応じて設定する関数
+         */
+        function setUITexts() {
+            //document.getElementById('app-title').textContent = t.appTitle;
+            //document.getElementById('app-description').textContent = t.appDescription;
+            document.getElementById('terms-title').textContent = t.termsTitle;
+            document.getElementById('terms-container').textContent = t.termsContent;
+            document.getElementById('agree-label').textContent = t.agreeLabel;
+            downloadWinBtn.textContent = t.downloadButtonWin;
+            downloadMacBtn.textContent = t.downloadButtonMac;
+            downloadPdfBtn.textContent = t.downloadButtonPdf;
+        }
+
+        /**
+         * メッセージを表示する関数
+         */
+        function showMessage(message, type = 'info') {
+            messageArea.textContent = message;
+            messageArea.className = `mt-6 text-center text-sm h-5 ${type === 'error' ? 'text-red-600' : 'text-gray-600'}`;
+        }
+
+        /**
+         * ★追加: ボタンの有効/無効を切り替える関数
+         */
+        function setButtonsDisabled(disabled) {
+            allButtons.forEach(btn => btn.disabled = disabled);
+        }
+
+        // チェックボックスの状態が変わったときの処理
+        agreeCheckbox.addEventListener('change', () => {
+            if (agreeCheckbox.checked) {
+                setButtonsDisabled(false);
+                showMessage('');
+            } else {
+                setButtonsDisabled(true);
+                showMessage(t.pleaseAgree, 'info');
+            }
+        });
+
+        // ★修正: 汎用的なダウンロード処理関数
+        const handleDownload = async (fileName) => {
+            if (!agreeCheckbox.checked) {
+                showMessage(t.pleaseAgree, 'error');
+                return;
+            }
+
+            showMessage(t.downloading);
+            setButtonsDisabled(true); // すべてのボタンを無効化
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                const storage = getStorage(app);
+                const fileRef = stref(storage, fileName);
+                const url = await getDownloadURL(fileRef);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                showMessage('');
+                let db;
+                let counterRef;
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+                if(fileName == 'ImageMate5_installer_110.msi'){
+                    counterRef = db.ref('counts/win_im5');
+                    await counterRef.transaction((currentValue) => {
+                        return (currentValue || 0) + 1;
+                    });
+                }
+                else if(fileName == 'ImageMate5_installer_110.pkg'){
+                    counterRef = db.ref('counts/mac_im5');
+                    await counterRef.transaction((currentValue) => {
+                        return (currentValue || 0) + 1;
+                    });
+                }
+
+            } catch (error) {
+                console.error("Download Error:", error);
+                showMessage(t.error, 'error');
+            } finally {
+                // チェックボックスがチェックされていればボタンを再度有効化
+                if (agreeCheckbox.checked) {
+                    setButtonsDisabled(false);
+                }
+            }
+        };
+        
+        // 各ボタンにイベントリスナーを設定
+        downloadWinBtn.addEventListener('click', () => handleDownload('ImageMate5_installer_110.msi'));
+        downloadMacBtn.addEventListener('click', () => handleDownload('ImageMate5_installer_110.pkg'));
+        downloadPdfBtn.addEventListener('click', () => handleDownload('ImageMate5 UserGuide_JP.pdf'));
+
+        // 初期化処理
+        function initialize() {
+            setUITexts();
+            showMessage(t.pleaseAgree, 'info');
+        }
+
+        initialize();
+
+    </script>
+
+</body>
+</html>

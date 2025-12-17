@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>カスタムロゴメーカー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fontsの読み込み -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Biz+UDPGothic&family=Dela+Gothic+One&family=DotGothic16&family=Kaisei+Decol&family=Lobster&family=M+PLUS+Rounded+1c:wght@400;800&family=Noto+Sans+JP:wght@400;700;900&family=Noto+Serif+JP:wght@400;700&family=Pacifico&family=Potta+One&family=Roboto:wght@400;700&family=RocknRoll+One&display=swap" rel="stylesheet">
+
+    <style>
+        /* 透明を表す市松模様の背景 */
+        .checkerboard {
+            background-color: #f0f0f0;
+            background-image:
+                linear-gradient(45deg, #ddd 25%, transparent 25%),
+                linear-gradient(-45deg, #ddd 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #ddd 75%),
+                linear-gradient(-45deg, transparent 75%, #ddd 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        
+        input[type="range"] {
+            accent-color: #3b82f6; 
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- 左側：コントロールパネル -->
+        <div class="lg:col-span-4 bg-white p-6 rounded-xl shadow-lg space-y-6 h-fit">
+            <h1 class="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">ロゴ設定</h1>
+
+            <!-- メインテキスト設定 -->
+            <div class="space-y-3">
+                <label class="block text-sm font-semibold text-slate-600">テキスト & フォント</label>
+                <input type="text" id="textInput" value="Logo Maker" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="テキストを入力">
+                
+                <select id="fontFamily" class="w-full border rounded px-3 py-2 bg-white">
+                    <option value="'Noto Sans JP', sans-serif">Noto Sans JP (ゴシック)</option>
+                    <option value="'Noto Serif JP', serif">Noto Serif JP (明朝)</option>
+                    <option value="'M PLUS Rounded 1c', sans-serif">M PLUS Rounded (丸ゴシック)</option>
+                    <option value="'Dela Gothic One', cursive">Dela Gothic One (極太)</option>
+                    <option value="'Potta One', cursive">Potta One (ポップ)</option>
+                    <option value="'DotGothic16', sans-serif">DotGothic16 (ドット)</option>
+                    <option value="'Kaisei Decol', serif">Kaisei Decol (デコ)</option>
+                    <option value="'RocknRoll One', sans-serif">RocknRoll One</option>
+                    <option value="'Lobster', cursive">Lobster (英字筆記体)</option>
+                    <option value="'Pacifico', cursive">Pacifico (英字手書き)</option>
+                    <option value="'Roboto', sans-serif">Roboto</option>
+                </select>
+
+                <div class="flex gap-4 items-center">
+                    <div class="flex-1">
+                        <label class="text-xs text-slate-500 block mb-1">サイズ</label>
+                        <input type="number" id="fontSize" value="80" min="10" max="300" class="w-full border rounded px-2 py-1">
+                    </div>
+                    <div class="flex items-center pt-5">
+                        <input type="checkbox" id="fontBold" class="w-4 h-4 text-blue-600 rounded">
+                        <label for="fontBold" class="ml-2 text-sm text-slate-700">太字</label>
+                    </div>
+                    <div class="flex items-center pt-5">
+                         <input type="checkbox" id="fontItalic" class="w-4 h-4 text-blue-600 rounded">
+                         <label for="fontItalic" class="ml-2 text-sm text-slate-700">斜体</label>
+                     </div>
+                </div>
+
+                <div>
+                    <label class="text-xs text-slate-500 block mb-1">文字色 (グラデーションも可)</label>
+                    <div class="flex gap-2">
+                        <input type="color" id="textColor" value="#ffffff" class="h-8 w-12 cursor-pointer border rounded">
+                        <select id="fillType" class="text-sm border rounded px-2 flex-1">
+                            <option value="solid">単色</option>
+                            <option value="gradient-vertical">縦グラデーション</option>
+                            <option value="gradient-horizontal">横グラデーション</option>
+                        </select>
+                    </div>
+                    <!-- グラデーション終了色（隠し項目） -->
+                    <div id="gradientColor2Container" class="hidden mt-2 flex items-center gap-2">
+                         <span class="text-xs">終了色:</span>
+                         <input type="color" id="textColor2" value="#ff0000" class="h-8 w-12 cursor-pointer border rounded">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 縁取り設定 1 (内側) -->
+            <div class="border-t pt-4 space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="block text-sm font-semibold text-slate-600">縁取り 1 (内側)</label>
+                    <input type="checkbox" id="outline1Enable" checked class="w-4 h-4">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">太さ</label>
+                        <input type="range" id="outline1Width" value="5" min="0" max="50" class="w-full">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">色</label>
+                        <input type="color" id="outline1Color" value="#3b82f6" class="h-8 w-full cursor-pointer border rounded">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 縁取り設定 2 (外側) -->
+            <div class="border-t pt-4 space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="block text-sm font-semibold text-slate-600">縁取り 2 (外側)</label>
+                    <input type="checkbox" id="outline2Enable" checked class="w-4 h-4">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">太さ</label>
+                        <input type="range" id="outline2Width" value="8" min="0" max="50" class="w-full">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">色</label>
+                        <input type="color" id="outline2Color" value="#1e3a8a" class="h-8 w-full cursor-pointer border rounded">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 影設定 -->
+            <div class="border-t pt-4 space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="block text-sm font-semibold text-slate-600">影 (ドロップシャドウ)</label>
+                    <input type="checkbox" id="shadowEnable" checked class="w-4 h-4">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">色</label>
+                        <input type="color" id="shadowColor" value="#000000" class="h-8 w-full cursor-pointer border rounded">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">ぼかし</label>
+                        <input type="range" id="shadowBlur" value="10" min="0" max="50" class="w-full">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">X ずれ</label>
+                        <input type="range" id="shadowX" value="5" min="-50" max="50" class="w-full">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">Y ずれ</label>
+                        <input type="range" id="shadowY" value="5" min="-50" max="50" class="w-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側：プレビューエリア -->
+        <div class="lg:col-span-8 flex flex-col gap-4">
+            <div class="bg-white p-4 rounded-xl shadow-lg flex-1 flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-slate-700">プレビュー</h2>
+                    <span class="text-xs text-slate-400">※背景は透過されます</span>
+                </div>
+                
+                <!-- キャンバスコンテナ -->
+                <div class="flex-1 min-h-[400px] border-2 border-dashed border-slate-300 rounded-lg checkerboard flex items-center justify-center overflow-auto p-4 relative" id="canvasContainer">
+                    <canvas id="logoCanvas" class="max-w-full"></canvas>
+                </div>
+            </div>
+
+            <!-- アクションボタン -->
+            <div class="flex justify-end gap-4">
+                <button onclick="downloadImage()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition transform hover:scale-105 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    PNGで保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('logoCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 各入力要素の取得
+        const elements = {
+            text: document.getElementById('textInput'),
+            fontFamily: document.getElementById('fontFamily'),
+            fontSize: document.getElementById('fontSize'),
+            fontBold: document.getElementById('fontBold'),
+            fontItalic: document.getElementById('fontItalic'),
+            textColor: document.getElementById('textColor'),
+            textColor2: document.getElementById('textColor2'),
+            fillType: document.getElementById('fillType'),
+            gradientColor2Container: document.getElementById('gradientColor2Container'),
+            
+            outline1Enable: document.getElementById('outline1Enable'),
+            outline1Width: document.getElementById('outline1Width'),
+            outline1Color: document.getElementById('outline1Color'),
+            
+            outline2Enable: document.getElementById('outline2Enable'),
+            outline2Width: document.getElementById('outline2Width'),
+            outline2Color: document.getElementById('outline2Color'),
+            
+            shadowEnable: document.getElementById('shadowEnable'),
+            shadowColor: document.getElementById('shadowColor'),
+            shadowBlur: document.getElementById('shadowBlur'),
+            shadowX: document.getElementById('shadowX'),
+            shadowY: document.getElementById('shadowY'),
+        };
+
+        // イベントリスナーの一括登録
+        Object.values(elements).forEach(el => {
+            if(el) {
+                el.addEventListener('input', drawLogo);
+                el.addEventListener('change', drawLogo); // セレクトボックス等用
+            }
+        });
+
+        // グラデーション選択時のUI制御
+        elements.fillType.addEventListener('change', () => {
+            if (elements.fillType.value !== 'solid') {
+                elements.gradientColor2Container.classList.remove('hidden');
+            } else {
+                elements.gradientColor2Container.classList.add('hidden');
+            }
+            drawLogo();
+        });
+
+        function drawLogo() {
+            const text = elements.text.value || ' '; // 空文字対策
+            const fontSize = parseInt(elements.fontSize.value);
+            const fontFamily = elements.fontFamily.value;
+            const isBold = elements.fontBold.checked;
+            const isItalic = elements.fontItalic.checked;
+            
+            // フォント設定
+            const fontStyle = `${isItalic ? 'italic ' : ''}${isBold ? 'bold ' : ''}${fontSize}px ${fontFamily}`;
+            ctx.font = fontStyle;
+            
+            // パラメータ取得
+            const outline1W = elements.outline1Enable.checked ? parseInt(elements.outline1Width.value) : 0;
+            const outline2W = elements.outline2Enable.checked ? parseInt(elements.outline2Width.value) : 0;
+            
+            const shadowBlur = elements.shadowEnable.checked ? parseInt(elements.shadowBlur.value) : 0;
+            const shadowX = elements.shadowEnable.checked ? parseInt(elements.shadowX.value) : 0;
+            const shadowY = elements.shadowEnable.checked ? parseInt(elements.shadowY.value) : 0;
+
+            // テキストサイズの計測
+            const metrics = ctx.measureText(text);
+            const textWidth = metrics.width;
+            
+            // 高さの概算（CanvasのmeasureTextは高さ取得が厳密には難しいため、fontSizeベースで計算）
+            // 多くのフォントで上下にはみ出す可能性があるため余裕を持たせる
+            const textHeightApprox = fontSize * 1.5;
+
+            // 必要なキャンバスサイズの計算（余白：ストローク幅 + 影 + 安全マージン）
+            const padding = Math.max(outline1W + outline2W, shadowBlur + Math.abs(shadowX)) * 2 + 50;
+            
+            canvas.width = textWidth + padding * 2;
+            canvas.height = textHeightApprox + padding; // 縦方向も余白を足す
+
+            // 再度フォント設定（Canvasサイズ変更でリセットされるため）
+            ctx.font = fontStyle;
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+            ctx.lineJoin = 'round'; // 角を丸くする
+            ctx.miterLimit = 2;
+
+            const x = canvas.width / 2;
+            const y = canvas.height / 2;
+
+            // 描画クリア
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // --- 描画レイヤーの重ね順: 影 -> 外枠 -> 内枠 -> 文字本体 ---
+
+            // 1. 影の描画 (一番後ろのレイヤーに適用)
+            // 影は「最も外側の有効なストローク」または「文字」に対してかける
+            if (elements.shadowEnable.checked) {
+                ctx.shadowColor = elements.shadowColor.value;
+                ctx.shadowBlur = shadowBlur;
+                ctx.shadowOffsetX = shadowX;
+                ctx.shadowOffsetY = shadowY;
+            }
+
+            // 2. 外側の縁取り (Outline 2)
+            // Outline 2 は、(InnerWidth + OuterWidth) * 2 の太さで描画し、後から内側を上書きする手法をとる
+            if (elements.outline2Enable.checked && outline2W > 0) {
+                ctx.lineWidth = (outline1W + outline2W) * 2; 
+                ctx.strokeStyle = elements.outline2Color.value;
+                ctx.strokeText(text, x, y);
+            }
+
+            // 影の設定を解除（内側のレイヤーには影を落とさないため）
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+
+            // 3. 内側の縁取り (Outline 1)
+            if (elements.outline1Enable.checked && outline1W > 0) {
+                ctx.lineWidth = outline1W * 2;
+                ctx.strokeStyle = elements.outline1Color.value;
+                ctx.strokeText(text, x, y);
+            }
+
+            // 4. 文字本体の塗りつぶし
+            if (elements.fillType.value === 'solid') {
+                ctx.fillStyle = elements.textColor.value;
+            } else {
+                // グラデーション作成
+                let gradient;
+                // テキストのバウンディングボックスに基づいてグラデーションを作成
+                // metrics.actualBoundingBoxAscent 等を使うとより正確だが、簡易的にフォントサイズベースで行う
+                const halfH = fontSize / 2;
+                const halfW = textWidth / 2;
+                
+                if (elements.fillType.value === 'gradient-vertical') {
+                    gradient = ctx.createLinearGradient(x, y - halfH, x, y + halfH);
+                } else {
+                    gradient = ctx.createLinearGradient(x - halfW, y, x + halfW, y);
+                }
+                gradient.addColorStop(0, elements.textColor.value);
+                gradient.addColorStop(1, elements.textColor2.value);
+                ctx.fillStyle = gradient;
+            }
+            
+            ctx.fillText(text, x, y);
+        }
+
+        function downloadImage() {
+            const link = document.createElement('a');
+            // ファイル名にテキストを含める（記号などは除去）
+            const safeText = elements.text.value.replace(/[^a-zA-Z0-9\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/g, '').substring(0, 10) || 'logo';
+            link.download = `${safeText}_logo.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Webフォント読み込み待ち (ロード後に再描画)
+        document.fonts.ready.then(function () {
+            drawLogo();
+        });
+
+        // 初期描画
+        drawLogo();
+
+        // ウィンドウリサイズ時も念のため再描画（canvasコンテナの幅が変わる可能性があるため...今回はcanvas自体が絶対サイズなので必須ではないが、一応）
+        window.addEventListener('resize', drawLogo);
+
+    </script>
+</body>
+</html>

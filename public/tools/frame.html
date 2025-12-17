@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>カスタム画像フレーム作成ツール</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #333;
+        }
+        h1 { margin-bottom: 20px; font-size: 1.5rem; }
+        
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        label { font-weight: bold; font-size: 0.9rem; }
+        input[type="number"], select, input[type="color"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+        button:hover { background-color: #0056b3; }
+
+        .preview-area {
+            flex: 1;
+            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), 
+                              linear-gradient(-45deg, #ccc 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #ccc 75%), 
+                              linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #fff; /* Checkerboard background */
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            min-height: 400px;
+            overflow: auto;
+            border: 1px solid #ddd;
+        }
+
+        canvas {
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>フレーム作成メーカー</h1>
+
+    <div class="container">
+        <div class="controls">
+            <div class="control-group">
+                <label>幅 (px)</label>
+                <input type="number" id="width" value="500">
+            </div>
+            <div class="control-group">
+                <label>高さ (px)</label>
+                <input type="number" id="height" value="500">
+            </div>
+            <div class="control-group">
+                <label>フレームの太さ (px)</label>
+                <input type="number" id="thickness" value="40">
+            </div>
+            <div class="control-group">
+                <label>スタイル</label>
+                <select id="style">
+                    <option value="simple">シンプル (実線)</option>
+                    <option value="double">ダブルライン</option>
+                    <option value="dots">水玉ドット</option>
+                    <option value="flower">フラワー (花柄)</option>
+                    <option value="star">スター (星柄)</option>
+                    <option value="chinese">中華風 (雷紋)</option>
+                    <option value="bamboo">和風・中華 (竹)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>メインカラー</label>
+                <input type="color" id="color" value="#000000">
+            </div>
+            
+            <button id="downloadBtn">画像をダウンロード (透過PNG)</button>
+        </div>
+
+        <div class="preview-area">
+            <canvas id="canvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 入力要素
+        const inputs = {
+            width: document.getElementById('width'),
+            height: document.getElementById('height'),
+            thickness: document.getElementById('thickness'),
+            style: document.getElementById('style'),
+            color: document.getElementById('color')
+        };
+
+        // イベントリスナー設定
+        Object.values(inputs).forEach(input => {
+            input.addEventListener('input', drawFrame);
+        });
+
+        // 描画実行
+        function drawFrame() {
+            const w = parseInt(inputs.width.value) || 500;
+            const h = parseInt(inputs.height.value) || 500;
+            const t = parseInt(inputs.thickness.value) || 40;
+            const style = inputs.style.value;
+            const color = inputs.color.value;
+
+            // キャンバスサイズ設定
+            canvas.width = w;
+            canvas.height = h;
+
+            // クリア
+            ctx.clearRect(0, 0, w, h);
+
+            // スタイルごとの描画
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+
+            switch (style) {
+                case 'simple':
+                    ctx.lineWidth = t;
+                    ctx.strokeRect(t/2, t/2, w - t, h - t);
+                    break;
+
+                case 'double':
+                    const outerT = t * 0.3;
+                    const innerT = t * 0.15;
+                    const gap = t * 0.2;
+                    
+                    // 外線
+                    ctx.lineWidth = outerT;
+                    ctx.strokeRect(outerT/2, outerT/2, w - outerT, h - outerT);
+                    // 内線
+                    ctx.lineWidth = innerT;
+                    const offset = outerT + gap + innerT/2;
+                    ctx.strokeRect(offset, offset, w - offset*2, h - offset*2);
+                    break;
+
+                case 'dots':
+                    drawPatternBorder(w, h, t, (x, y, size) => {
+                        ctx.beginPath();
+                        ctx.arc(x, y, size * 0.35, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                    break;
+
+                case 'flower':
+                    drawPatternBorder(w, h, t, (x, y, size) => {
+                        drawFlower(x, y, size * 0.4, color);
+                    });
+                    break;
+
+                case 'star':
+                    drawPatternBorder(w, h, t, (x, y, size) => {
+                        drawStar(x, y, 5, size * 0.4, size * 0.2);
+                        ctx.fill();
+                    });
+                    break;
+
+                case 'chinese':
+                    // 簡易的な雷紋風パターン
+                    drawChinesePattern(w, h, t);
+                    break;
+
+                case 'bamboo':
+                     drawBambooPattern(w, h, t);
+                     break;
+            }
+        }
+
+        // パターンを周囲に配置するヘルパー関数
+        function drawPatternBorder(w, h, t, drawFn) {
+            const spacing = t * 1.0; // 間隔
+            
+            // 上辺・下辺
+            for (let x = t/2; x < w; x += spacing) {
+                drawFn(x, t/2, t); // Top
+                drawFn(x, h - t/2, t); // Bottom
+            }
+            // 左辺・右辺
+            for (let y = t/2; y < h; y += spacing) {
+                drawFn(t/2, y, t); // Left
+                drawFn(w - t/2, y, t); // Right
+            }
+            // 四隅を埋める
+            drawFn(t/2, t/2, t);
+            drawFn(w - t/2, t/2, t);
+            drawFn(w - t/2, h - t/2, t);
+            drawFn(t/2, h - t/2, t);
+        }
+
+        // 花を描画する関数
+        function drawFlower(x, y, radius, color) {
+            ctx.beginPath();
+            ctx.fillStyle = color;
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i;
+                const cx = x + Math.cos(angle) * (radius * 0.6);
+                const cy = y + Math.sin(angle) * (radius * 0.6);
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.beginPath();
+            ctx.fillStyle = "#ffffff"; // 中心は白
+            ctx.arc(x, y, radius * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = color; // 色を戻す
+        }
+
+        // 星を描画する関数
+        function drawStar(cx, cy, spikes, outerRadius, innerRadius) {
+            let rot = Math.PI / 2 * 3;
+            let x = cx;
+            let y = cy;
+            let step = Math.PI / spikes;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                x = cx + Math.cos(rot) * outerRadius;
+                y = cy + Math.sin(rot) * outerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+
+                x = cx + Math.cos(rot) * innerRadius;
+                y = cy + Math.sin(rot) * innerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+            }
+            ctx.lineTo(cx, cy - outerRadius);
+            ctx.closePath();
+        }
+
+        // 中華風（雷紋）を描画する関数
+        function drawChinesePattern(w, h, t) {
+            ctx.lineWidth = t * 0.1;
+            const size = t;
+            
+            // 外枠と内枠
+            ctx.strokeRect(t * 0.2, t * 0.2, w - t * 0.4, h - t * 0.4);
+            ctx.strokeRect(t * 0.8, t * 0.8, w - t * 1.6, h - t * 1.6);
+
+            // 簡易的な幾何学模様（渦巻きの代わり）
+            const step = t * 1.5;
+            for(let x = t; x < w - t; x += step) {
+                // 上
+                drawMeander(x, t/2, t*0.6);
+                // 下
+                drawMeander(x, h - t/2, t*0.6);
+            }
+            for(let y = t; y < h - t; y += step) {
+                // 左
+                drawMeander(t/2, y, t*0.6, true);
+                // 右
+                drawMeander(w - t/2, y, t*0.6, true);
+            }
+        }
+
+        function drawMeander(x, y, s, vertical = false) {
+            ctx.save();
+            ctx.translate(x, y);
+            if(vertical) ctx.rotate(Math.PI / 2);
+            ctx.strokeRect(-s/2, -s/2, s, s);
+            ctx.beginPath();
+            ctx.moveTo(-s/2, 0); ctx.lineTo(s/2, 0);
+            ctx.moveTo(0, -s/2); ctx.lineTo(0, s/2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // 竹（バンブー）スタイル
+        function drawBambooPattern(w, h, t) {
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.lineWidth = t * 0.8;
+            
+            const segmentLen = t * 2;
+            
+            // 枠を描く関数
+            const drawSegment = (x1, y1, x2, y2) => {
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                
+                // 節（ふし）を描く
+                ctx.save();
+                ctx.strokeStyle = "rgba(255,255,255,0.5)";
+                ctx.lineWidth = t * 0.2;
+                ctx.beginPath();
+                ctx.moveTo(x2 - (x2-x1)*0.1, y2 - (y2-y1)*0.1);
+                ctx.lineTo(x2 + (x2-x1)*0.05, y2 + (y2-y1)*0.05);
+                ctx.stroke();
+                ctx.restore();
+            };
+
+            // 上
+            ctx.beginPath();
+            ctx.moveTo(t/2, t/2);
+            ctx.lineTo(w - t/2, t/2);
+            ctx.stroke();
+            // 左
+            ctx.beginPath();
+            ctx.moveTo(t/2, t/2);
+            ctx.lineTo(t/2, h - t/2);
+            ctx.stroke();
+             // 右
+            ctx.beginPath();
+            ctx.moveTo(w-t/2, t/2);
+            ctx.lineTo(w-t/2, h - t/2);
+            ctx.stroke();
+             // 下
+            ctx.beginPath();
+            ctx.moveTo(t/2, h-t/2);
+            ctx.lineTo(w-t/2, h-t/2);
+            ctx.stroke();
+
+            // 四隅の結び目風
+            const cornerSize = t * 0.6;
+            ctx.fillStyle = ctx.strokeStyle;
+            [ [t/2, t/2], [w-t/2, t/2], [w-t/2, h-t/2], [t/2, h-t/2] ].forEach(pos => {
+                ctx.beginPath();
+                ctx.arc(pos[0], pos[1], cornerSize, 0, Math.PI*2);
+                ctx.fill();
+            });
+        }
+
+        // ダウンロード処理
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'custom-frame.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+
+        // 初期描画
+        drawFrame();
+    </script>
+</body>
+</html>

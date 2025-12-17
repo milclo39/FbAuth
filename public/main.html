@@ -3,55 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>メインページ</title>
+    <title>メインページ - アプリ一覧</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
-		.btn {
-		  display: inline-block;
-		  padding: 0.3em 1em;
-		  text-decoration: none;
-		  color: #67c5ff;
-		  border: solid 2px #67c5ff;
-		  border-radius: 3px;
-		  transition: .4s;
-		}
-
-		.btn:hover {
-		  background: #67c5ff;
-		  color: white;
-		}
+        body {
+            font-family: 'Roboto', 'Google Sans', Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .google-shadow {
+            box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+        }
+        .list-item-hover:hover {
+            background-color: #f1f3f4;
+        }
+        /* アカウントメニューの表示切り替え用 */
+        #account-menu.hidden {
+            display: none;
+        }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
-    <div class="w-full max-w-lg text-center bg-white rounded-lg shadow-md p-8">
-        <!--h1 class="text-3xl font-bold text-gray-800 mb-4">ようこそ！</h1-->
-        <p id="welcome-message" class="text-gray-600 mb-6">ログイン情報を確認しています...</p>
-        <button id="logout-button-main" class="w-full max-w-xs mx-auto flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-            ログアウト
-        </button>
-		<br>
-        <a href="./tools/download.html" class="btn"><button>Download</button></a>
-        <a href="./tools/drawing.html" class="btn"><button>お絵描き</button></a>
-        <a href="./tools/fablicdraw.html" class="btn"><button>図形描画</button></a>
-        <a href="./tools/firechat.html" class="btn"><button>チャット</button></a>
-		<br><br>
-        <a href="./tools/firemovie.html" class="btn"><button>Fire動画</button></a>
-        <a href="./tools/imageview.html" class="btn"><button>画像表示</button></a>
-        <a href="./tools/ocr.html" class="btn"><button>文字認識</button></a>
-        <a href="./tools/pdfmerge.html" class="btn"><button>PDF結合</button></a>
-		<br><br>
-        <a href="./tools/player.html" class="btn"><button>動画再生</button></a>
-        <a href="./tools/rotation.html" class="btn"><button>画像回転</button></a>
-        <a href="./tools/terms.html" class="btn"><button>利用規約</button></a>
-        <a href="./tools/transcription.html" class="btn"><button>文字読取</button></a>
-        <br><br>
-        <a href="./tools/logo.html" class="btn"><button>ロゴ作成</button></a>
-        <a href="./tools/frame.html" class="btn"><button>フレーム作成</button></a>
-    </div>
+<body class="min-h-screen flex flex-col">
+
+    <!-- ヘッダー -->
+    <header class="h-16 flex items-center justify-between px-4 md:px-8 bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="flex items-center gap-2">
+            <div class="text-xl font-medium text-gray-700">App Directory</div>
+        </div>
+
+        <!-- 右側：アカウントセクション -->
+        <div class="relative">
+            <button id="account-avatar" class="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg hover:ring-4 hover:ring-gray-100 transition-all overflow-hidden focus:outline-none">
+                <span id="avatar-letter">U</span>
+            </button>
+
+            <!-- ログアウト用ドロップダウンメニュー -->
+            <div id="account-menu" class="hidden absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-200 py-4 flex flex-col items-center z-50">
+                <div id="menu-email" class="text-sm text-gray-500 mb-4 px-4 text-center truncate w-full">user@example.com</div>
+                <div class="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-3xl mb-4">
+                    <span id="menu-avatar-letter">U</span>
+                </div>
+                <div class="text-lg font-medium text-gray-800 px-4 mb-4">こんにちは！</div>
+                
+                <hr class="w-full border-gray-100 mb-2">
+                
+                <button id="logout-button-main" class="flex items-center justify-center gap-2 px-6 py-2 border border-gray-300 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors w-10/12">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    ログアウト
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-grow flex flex-col items-center p-4 md:p-8">
+        <div class="w-full max-w-2xl bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+                <h1 class="text-gray-700 font-medium text-lg">利用可能なツール</h1>
+            </div>
+
+            <div id="link-list" class="divide-y divide-gray-100">
+                <!-- ツール項目 (タブレット等の操作を考慮したゆとりあるサイズ) -->
+                <a href="./tools/download.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mr-4 group-hover:bg-blue-100">📥</div>
+                    <div class="flex-grow text-gray-700 font-medium">Download</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/drawing.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center mr-4 group-hover:bg-red-100">🎨</div>
+                    <div class="flex-grow text-gray-700 font-medium">お絵描き</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/fablicdraw.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-green-50 text-green-600 flex items-center justify-center mr-4 group-hover:bg-green-100">📐</div>
+                    <div class="flex-grow text-gray-700 font-medium">図形描画</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/firechat.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center mr-4 group-hover:bg-yellow-100">💬</div>
+                    <div class="flex-grow text-gray-700 font-medium">チャット</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/firemovie.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center mr-4 group-hover:bg-purple-100">🎬</div>
+                    <div class="flex-grow text-gray-700 font-medium">Fire動画</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/imageview.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mr-4 group-hover:bg-indigo-100">🖼️</div>
+                    <div class="flex-grow text-gray-700 font-medium">画像表示</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/ocr.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-pink-50 text-pink-600 flex items-center justify-center mr-4 group-hover:bg-pink-100">🔍</div>
+                    <div class="flex-grow text-gray-700 font-medium">文字認識</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/pdfmerge.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center mr-4 group-hover:bg-orange-100">📄</div>
+                    <div class="flex-grow text-gray-700 font-medium">PDF結合</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/player.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mr-4 group-hover:bg-blue-100">▶️</div>
+                    <div class="flex-grow text-gray-700 font-medium">動画再生</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/rotation.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-gray-50 text-gray-600 flex items-center justify-center mr-4 group-hover:bg-gray-100">🔄</div>
+                    <div class="flex-grow text-gray-700 font-medium">画像回転</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/logo.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center mr-4 group-hover:bg-amber-100">🏷️</div>
+                    <div class="flex-grow text-gray-700 font-medium">ロゴ作成</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/frame.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center mr-4 group-hover:bg-teal-100">🔲</div>
+                    <div class="flex-grow text-gray-700 font-medium">フレーム作成</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+                <a href="./tools/terms.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center mr-4 group-hover:bg-gray-100">⚖️</div>
+                    <div class="flex-grow text-gray-700 font-medium">利用規約</div>
+                    <div class="text-gray-400">❯</div>
+                </a>
+            </div>
+        </div>
+        
+        <p id="welcome-message" class="mt-8 text-sm text-gray-500 italic">ログイン情報を確認しています...</p>
+    </main>
 
     <!-- Firebase SDKの読み込み -->
     <script type="module">
@@ -73,30 +158,43 @@
 
         const welcomeMessage = document.getElementById('welcome-message');
         const logoutButtonMain = document.getElementById('logout-button-main');
+        const accountAvatar = document.getElementById('account-avatar');
+        const accountMenu = document.getElementById('account-menu');
+        const avatarLetter = document.getElementById('avatar-letter');
+        const menuAvatarLetter = document.getElementById('menu-avatar-letter');
+        const menuEmail = document.getElementById('menu-email');
 
-        // 認証状態を監視し、ページへのアクセスを制御します
+        // アカウントメニューの表示切り替え
+        accountAvatar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            accountMenu.classList.toggle('hidden');
+        });
+
+        // メニュー外クリックで閉じる
+        document.addEventListener('click', () => {
+            accountMenu.classList.add('hidden');
+        });
+
+        // 認証状態を監視
         onAuthStateChanged(auth, (user) => {
-            // ユーザーがログインしており、かつメールアドレスが確認済みの場合のみページを表示
             if (user && user.emailVerified) {
-                console.log("User is logged in and verified:", user.email);
-                welcomeMessage.textContent = `ログインに成功しました。 (${user.email})`;
+                welcomeMessage.textContent = `ログイン中: ${user.email}`;
+                menuEmail.textContent = user.email;
+                
+                // アバターの一文字目を設定
+                const initial = user.email.charAt(0).toUpperCase();
+                avatarLetter.textContent = initial;
+                menuAvatarLetter.textContent = initial;
             } else {
-                // ユーザーがログインしていない、またはメールが未確認の場合、ログインページにリダイレクト
-                console.log("User is not logged in or email is not verified. Redirecting...");
-                // 未確認のユーザーセッションが残っている可能性を考慮し、念のためログアウト処理を実行
-                if (user) {
-                    signOut(auth);
-                }
+                if (user) signOut(auth);
                 window.location.href = 'index.html';
             }
         });
 
-        // ログアウトボタンの処理
+        // ログアウト処理
         logoutButtonMain.addEventListener('click', async () => {
             try {
                 await signOut(auth);
-                console.log('Logged out successfully');
-                // onAuthStateChangedがリダイレクトを処理します
             } catch (error) {
                 console.error('Logout Error:', error);
             }
@@ -104,4 +202,3 @@
     </script>
 </body>
 </html>
-

@@ -20,9 +20,15 @@
         .list-item-hover:hover {
             background-color: #f1f3f4;
         }
-        /* アカウントメニューの表示切り替え用 */
         #account-menu.hidden {
             display: none;
+        }
+        /* アイコン画像のスタイル */
+        .profile-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none; /* 初期状態は非表示 */
         }
     </style>
 </head>
@@ -37,18 +43,23 @@
         <!-- 右側：アカウントセクション -->
         <div class="relative">
             <button id="account-avatar" class="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg hover:ring-4 hover:ring-gray-100 transition-all overflow-hidden focus:outline-none">
+                <img id="header-img" class="profile-img" alt="User Photo">
                 <span id="avatar-letter">U</span>
             </button>
 
             <!-- ログアウト用ドロップダウンメニュー -->
-            <div id="account-menu" class="hidden absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-200 py-4 flex flex-col items-center z-50">
+            <div id="account-menu" class="hidden absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-200 py-6 flex flex-col items-center z-50">
                 <div id="menu-email" class="text-sm text-gray-500 mb-4 px-4 text-center truncate w-full">user@example.com</div>
-                <div class="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-3xl mb-4">
+                
+                <!-- メニュー内の大きなアイコン -->
+                <div class="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-3xl mb-4 overflow-hidden">
+                    <img id="menu-img" class="profile-img" alt="User Photo">
                     <span id="menu-avatar-letter">U</span>
                 </div>
-                <div class="text-lg font-medium text-gray-800 px-4 mb-4">こんにちは！</div>
                 
-                <hr class="w-full border-gray-100 mb-2">
+                <div id="menu-name" class="text-lg font-medium text-gray-800 px-4 mb-4">こんにちは！</div>
+                
+                <hr class="w-full border-gray-100 mb-4">
                 
                 <button id="logout-button-main" class="flex items-center justify-center gap-2 px-6 py-2 border border-gray-300 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors w-10/12">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
@@ -66,7 +77,7 @@
             </div>
 
             <div id="link-list" class="divide-y divide-gray-100">
-                <!-- ツール項目 (タブレット等の操作を考慮したゆとりあるサイズ) -->
+                <!-- ツールリスト項目 -->
                 <a href="./tools/download.html" class="flex items-center p-4 md:p-5 list-item-hover transition-colors group">
                     <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mr-4 group-hover:bg-blue-100">📥</div>
                     <div class="flex-grow text-gray-700 font-medium">Download</div>
@@ -138,12 +149,12 @@
         <p id="welcome-message" class="mt-8 text-sm text-gray-500 italic">ログイン情報を確認しています...</p>
     </main>
 
-    <!-- Firebase SDKの読み込み -->
+    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // index.html と同じFirebase設定を使用します
+        // Firebase設定
         const firebaseConfig = {
             apiKey: "AIzaSyCjsA2sYDk5pyXw_qmwSqDkK6jcijVwjhw",
             authDomain: "miclosoft.firebaseapp.com",
@@ -156,42 +167,68 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
 
+        // 要素の取得
         const welcomeMessage = document.getElementById('welcome-message');
         const logoutButtonMain = document.getElementById('logout-button-main');
         const accountAvatar = document.getElementById('account-avatar');
         const accountMenu = document.getElementById('account-menu');
+        
+        const headerImg = document.getElementById('header-img');
+        const menuImg = document.getElementById('menu-img');
         const avatarLetter = document.getElementById('avatar-letter');
         const menuAvatarLetter = document.getElementById('menu-avatar-letter');
+        
         const menuEmail = document.getElementById('menu-email');
+        const menuName = document.getElementById('menu-name');
 
-        // アカウントメニューの表示切り替え
+        // メニュー開閉
         accountAvatar.addEventListener('click', (e) => {
             e.stopPropagation();
             accountMenu.classList.toggle('hidden');
         });
 
-        // メニュー外クリックで閉じる
         document.addEventListener('click', () => {
             accountMenu.classList.add('hidden');
         });
 
-        // 認証状態を監視
+        // 認証監視
         onAuthStateChanged(auth, (user) => {
             if (user && user.emailVerified) {
                 welcomeMessage.textContent = `ログイン中: ${user.email}`;
                 menuEmail.textContent = user.email;
+                menuName.textContent = user.displayName ? `${user.displayName} さん` : "こんにちは！";
                 
-                // アバターの一文字目を設定
-                const initial = user.email.charAt(0).toUpperCase();
-                avatarLetter.textContent = initial;
-                menuAvatarLetter.textContent = initial;
+                // 画像の設定
+                if (user.photoURL) {
+                    headerImg.src = user.photoURL;
+                    menuImg.src = user.photoURL;
+                    
+                    // 画像の読み込みが成功したら表示
+                    headerImg.onload = () => {
+                        headerImg.style.display = 'block';
+                        avatarLetter.style.display = 'none';
+                    };
+                    menuImg.onload = () => {
+                        menuImg.style.display = 'block';
+                        menuAvatarLetter.style.display = 'none';
+                    };
+                } else {
+                    // 画像がない場合は頭文字
+                    const initial = (user.displayName || user.email).charAt(0).toUpperCase();
+                    avatarLetter.textContent = initial;
+                    menuAvatarLetter.textContent = initial;
+                    headerImg.style.display = 'none';
+                    menuImg.style.display = 'none';
+                    avatarLetter.style.display = 'block';
+                    menuAvatarLetter.style.display = 'block';
+                }
             } else {
                 if (user) signOut(auth);
                 window.location.href = 'index.html';
             }
         });
 
-        // ログアウト処理
+        // ログアウト
         logoutButtonMain.addEventListener('click', async () => {
             try {
                 await signOut(auth);

@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fire chat</title>
-    <!-- Tailwind CSSを読み込み -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts (Inter) を読み込み -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
@@ -37,7 +35,6 @@
 <body class="flex items-center justify-center h-screen">
 
     <div class="w-full max-w-4xl h-full md:h-[95vh] flex flex-col bg-white shadow-sm border border-gray-200 md:rounded-2xl overflow-hidden">
-        <!-- ヘッダー -->
         <header class="border-b border-gray-200 p-4 flex justify-between items-center bg-white">
             <div class="flex items-center space-x-3">
                 <div class="bg-blue-600 text-white p-2 rounded-lg">
@@ -53,14 +50,12 @@
             </div>
         </header>
 
-        <!-- メッセージ表示エリア -->
         <main id="messages-container" class="flex-1 overflow-y-auto bg-white pt-4 pb-2">
             <div id="loading-indicator" class="flex justify-center items-center h-full">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
         </main>
 
-        <!-- メッセージ入力フォーム -->
         <footer class="p-4 bg-white border-t border-gray-100">
             <form id="message-form" class="relative bg-gray-100 rounded-3xl flex items-center px-4 py-2 focus-within:bg-white focus-within:ring-1 focus-within:ring-gray-300 transition-all">
                 <textarea id="message-input" placeholder="Enterで送信 / Shift+Enterで改行"
@@ -76,7 +71,6 @@
         </footer>
     </div>
 
-    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -223,6 +217,34 @@
             }
         }
 
+        /**
+         * URLを含むテキストをリンク付きHTMLに変換する関数
+         * 重要: XSS対策のため、先にHTMLエスケープを行ってからリンク化します
+         */
+        function linkify(text) {
+            if (!text) return '';
+
+            // 1. まずHTML特殊文字をエスケープする（スクリプト埋め込み防止）
+            const escapedText = text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+
+            // 2. URLパターン (http/https) を正規表現で検出
+            // 詳しく: https?:// で始まり、空白文字(\s)以外の文字が続く部分
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+            // 3. URL部分をaタグに置換する
+            // target="_blank" で別タブで開く
+            // rel="noopener noreferrer" はセキュリティ上の必須属性
+            // break-all で長いURLのレイアウト崩れを防ぐ
+            return escapedText.replace(urlRegex, (url) => {
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline break-all">${url}</a>`;
+            });
+        }
+
         function renderMessages(messages) {
             messagesContainer.innerHTML = '';
             if (messages.length === 0) {
@@ -251,7 +273,6 @@
 
                 const time = document.createElement('span');
                 time.className = 'text-xs text-gray-500';
-                //time.textContent = msg.createdAt ? new Date(msg.createdAt.toDate()).toLocaleTimeString([], { date: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...';
                 time.textContent = msg.createdAt ? new Date(msg.createdAt.toDate()).toLocaleString('ja-JP') : '';
 
                 header.appendChild(name);
@@ -259,7 +280,9 @@
 
                 const text = document.createElement('div');
                 text.className = 'text-sm text-gray-700 mt-0.5 whitespace-pre-wrap leading-relaxed';
-                text.textContent = msg.text;
+                
+                // 【変更点】単なる textContent ではなく、linkify関数を通したHTMLとして設定
+                text.innerHTML = linkify(msg.text);
 
                 if (isMine) {
                     const deleteBtn = document.createElement('button');

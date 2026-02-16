@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>もぐらバスターDX</title>
+  <style>
+    :root {
+      --bg: #1a1c2c;
+      --panel: #2f3252;
+      --accent: #f4d35e;
+      --accent2: #ee964b;
+      --danger: #f95738;
+      --ok: #7bd389;
+      --text: #f7f7ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+      background: linear-gradient(#121421, #1a1c2c);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 16px;
+    }
+
+    .game-shell {
+      width: min(760px, 100%);
+      background: #252842;
+      border: 4px solid #11131d;
+      border-radius: 14px;
+      box-shadow: 0 0 0 4px #3f446f inset, 0 18px 32px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      background: var(--panel);
+      padding: 12px 14px;
+      border-bottom: 3px solid #11131d;
+      font-weight: 700;
+    }
+
+    .title { color: var(--accent); font-size: 1rem; }
+    .score, .time { font-size: 0.95rem; }
+    .danger-time { color: var(--danger); animation: blink 0.4s infinite alternate; }
+
+    @keyframes blink {
+      from { opacity: 1; }
+      to { opacity: 0.45; }
+    }
+
+    .stage {
+      padding: 16px;
+      background: repeating-linear-gradient(45deg, #2d3150, #2d3150 10px, #282b45 10px, #282b45 20px);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(90px, 1fr));
+      gap: 14px;
+    }
+
+    .hole {
+      position: relative;
+      background: #445;
+      border: 3px solid #121421;
+      border-radius: 12px;
+      padding: 8px;
+      height: 132px;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 80ms ease;
+    }
+
+    .hole:active { transform: translateY(2px); }
+
+    .pit {
+      width: 100%;
+      height: 58%;
+      position: absolute;
+      bottom: 8px;
+      left: 0;
+      right: 0;
+      margin: auto;
+      background: radial-gradient(circle at 50% 30%, #202020, #060606 70%);
+      border-radius: 50%;
+      border: 3px solid #111;
+      overflow: hidden;
+    }
+
+    .mole {
+      position: absolute;
+      width: 62%;
+      height: 92%;
+      left: 19%;
+      bottom: -95%;
+      border-radius: 48% 48% 40% 40%;
+      border: 3px solid #111;
+      transition: bottom 120ms ease;
+      image-rendering: pixelated;
+      box-shadow: inset 0 -8px rgba(0, 0, 0, 0.25);
+    }
+
+    .mole.normal { background: #9c6644; }
+    .mole.gold {
+      background: linear-gradient(#ffde7d, #f6bd60);
+      box-shadow: 0 0 14px rgba(255, 223, 95, 0.7), inset 0 -8px rgba(0, 0, 0, 0.25);
+    }
+    .mole.bomb {
+      background: linear-gradient(#ff6b6b, #c1121f);
+      box-shadow: 0 0 10px rgba(255, 107, 107, 0.75), inset 0 -8px rgba(0, 0, 0, 0.25);
+    }
+
+    .mole.show { bottom: -4%; }
+
+    .label {
+      position: absolute;
+      top: 7px;
+      left: 8px;
+      font-size: 0.72rem;
+      color: #d9dce8;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 6px;
+      padding: 2px 6px;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: var(--panel);
+      border-top: 3px solid #11131d;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 3px solid #111;
+      border-radius: 8px;
+      font-family: inherit;
+      font-weight: 700;
+      color: #161616;
+      background: var(--accent);
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+
+    button:hover { filter: brightness(1.07); }
+
+    .combo {
+      color: var(--ok);
+      font-weight: 700;
+    }
+
+    .log { min-height: 1.2rem; color: #f9b17a; }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(4, 4, 12, 0.78);
+      padding: 16px;
+    }
+
+    .overlay.show { display: flex; }
+
+    .result {
+      width: min(420px, 100%);
+      background: #24273f;
+      border: 4px solid #0f111a;
+      box-shadow: 0 0 0 4px #41476f inset;
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .rank {
+      font-size: 2.8rem;
+      color: var(--accent);
+      margin: 10px 0 8px;
+    }
+
+    .small { font-size: 0.84rem; opacity: 0.9; }
+    .stun { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <div class="game-shell">
+    <div class="hud">
+      <div class="title">もぐらバスターDX</div>
+      <div class="score">SCORE: <span id="score">0</span></div>
+      <div class="time">TIME: <span id="time">60</span></div>
+    </div>
+
+    <div class="stage">
+      <div class="grid" id="grid"></div>
+    </div>
+
+    <div class="footer">
+      <div>
+        <button id="startBtn">START</button>
+        <button id="resetBtn">RESET</button>
+      </div>
+      <div class="combo">COMBO: <span id="combo">0</span> / MAX: <span id="maxCombo">0</span></div>
+      <div id="status" class="log">1〜9キーでも叩ける！</div>
+    </div>
+  </div>
+
+  <div id="resultOverlay" class="overlay">
+    <div class="result">
+      <div class="small">TIME UP!</div>
+      <h2>リザルト</h2>
+      <div>最終スコア: <strong id="finalScore">0</strong></div>
+      <div>最大コンボ: <strong id="finalCombo">0</strong></div>
+      <div class="rank" id="rank">C</div>
+      <button id="retryBtn">もう一回</button>
+    </div>
+  </div>
+
+  <script>
+    const HOLE_COUNT = 9;
+    const GAME_TIME = 60;
+
+    const state = {
+      running: false,
+      score: 0,
+      combo: 0,
+      maxCombo: 0,
+      timeLeft: GAME_TIME,
+      active: new Map(),
+      timeTimer: null,
+      spawnTimer: null,
+      stunUntil: 0,
+      lastSpawnHole: -1
+    };
+
+    const grid = document.getElementById('grid');
+    const scoreEl = document.getElementById('score');
+    const comboEl = document.getElementById('combo');
+    const maxComboEl = document.getElementById('maxCombo');
+    const timeEl = document.getElementById('time');
+    const statusEl = document.getElementById('status');
+    const overlayEl = document.getElementById('resultOverlay');
+
+    let audioCtx;
+    let bgmInterval = null;
+
+    function initBoard() {
+      grid.innerHTML = '';
+      for (let i = 0; i < HOLE_COUNT; i += 1) {
+        const hole = document.createElement('button');
+        hole.className = 'hole';
+        hole.dataset.idx = i;
+        hole.innerHTML = `
+          <span class="label">${i + 1}</span>
+          <div class="pit"><div class="mole" id="mole-${i}"></div></div>
+        `;
+        hole.addEventListener('click', () => hit(i));
+        grid.appendChild(hole);
+      }
+    }
+
+    function nowSec() {
+      return GAME_TIME - state.timeLeft;
+    }
+
+    function getAppearDuration() {
+      const sec = nowSec();
+      if (sec >= 50) return 600;
+      if (sec >= 30) return 800;
+      return 1200;
+    }
+
+    function getMaxActive() {
+      const sec = nowSec();
+      if (sec >= 45) return 3;
+      if (sec >= 20) return 2;
+      return 1;
+    }
+
+    function getNextSpawnDelay() {
+      const progress = nowSec() / GAME_TIME;
+      const min = 500 - (progress * 250);
+      const max = 1500 - (progress * 700);
+      const delay = min + Math.random() * Math.max(200, (max - min));
+      return Math.max(220, delay);
+    }
+
+    function getMoleType() {
+      const sec = nowSec();
+      const bombRate = sec >= 50 ? 0.15 : 0.1;
+      const r = Math.random();
+      if (r < bombRate) return 'bomb';
+      if (r < bombRate + 0.05) return 'gold';
+      return 'normal';
+    }
+
+    function pickHole() {
+      const free = [];
+      for (let i = 0; i < HOLE_COUNT; i += 1) {
+        if (!state.active.has(i)) free.push(i);
+      }
+      if (!free.length) return -1;
+
+      if (state.lastSpawnHole !== -1 && free.includes(state.lastSpawnHole) && Math.random() <= 0.3) {
+        return state.lastSpawnHole;
+      }
+
+      const filtered = free.filter((idx) => idx !== state.lastSpawnHole);
+      const pool = filtered.length ? filtered : free;
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    function spawnOne() {
+      if (!state.running) return;
+      if (state.active.size >= getMaxActive()) return;
+
+      const idx = pickHole();
+      if (idx === -1) return;
+
+      const type = getMoleType();
+      const moleEl = document.getElementById(`mole-${idx}`);
+      moleEl.className = `mole ${type} show`;
+
+      if (type === 'bomb') {
+        statusEl.textContent = '⚠ 爆弾もぐら注意！';
+        beep(220, 0.08, 'sawtooth', 0.06);
+      }
+
+      const timeoutId = setTimeout(() => {
+        hideMole(idx);
+      }, getAppearDuration());
+
+      state.active.set(idx, { type, timeoutId });
+      state.lastSpawnHole = idx;
+    }
+
+    function scheduleSpawn() {
+      if (!state.running) return;
+      spawnOne();
+      state.spawnTimer = setTimeout(scheduleSpawn, getNextSpawnDelay());
+    }
+
+    function hideMole(idx) {
+      const moleEl = document.getElementById(`mole-${idx}`);
+      moleEl.className = 'mole';
+      const rec = state.active.get(idx);
+      if (!rec) return;
+      clearTimeout(rec.timeoutId);
+      state.active.delete(idx);
+    }
+
+    function comboMultiplier() {
+      return Math.min(2, 1 + Math.max(0, state.combo - 1) * 0.1);
+    }
+
+    function applyMiss(points, message) {
+      state.score += points;
+      state.combo = 0;
+      statusEl.textContent = message;
+      beep(140, 0.1, 'square', 0.08);
+      updateHUD();
+    }
+
+    function hit(idx) {
+      if (!state.running) return;
+      if (Date.now() < state.stunUntil) {
+        statusEl.innerHTML = `<span class="stun">硬直中...</span>`;
+        return;
+      }
+
+      const rec = state.active.get(idx);
+      if (!rec) {
+        applyMiss(-50, '空振り！ -50');
+        return;
+      }
+
+      hideMole(idx);
+
+      if (rec.type === 'bomb') {
+        state.stunUntil = Date.now() + 1000;
+        applyMiss(-300, '爆弾ヒット！ -300 / 1秒硬直');
+        beep(90, 0.2, 'triangle', 0.1);
+        return;
+      }
+
+      state.combo += 1;
+      state.maxCombo = Math.max(state.maxCombo, state.combo);
+
+      const base = rec.type === 'gold' ? 500 : 100;
+      const gained = Math.round(base * comboMultiplier());
+      state.score += gained;
+      statusEl.textContent = `${rec.type === 'gold' ? '金' : '通常'}もぐら！ +${gained}`;
+      beep(rec.type === 'gold' ? 880 : 560, 0.06, 'square', 0.06);
+      updateHUD();
+    }
+
+    function updateHUD() {
+      scoreEl.textContent = state.score;
+      comboEl.textContent = state.combo;
+      maxComboEl.textContent = state.maxCombo;
+      timeEl.textContent = state.timeLeft;
+
+      if (state.timeLeft <= 10) {
+        timeEl.parentElement.classList.add('danger-time');
+      } else {
+        timeEl.parentElement.classList.remove('danger-time');
+      }
+    }
+
+    function judgeRank(score) {
+      if (score >= 10000) return 'S';
+      if (score >= 7000) return 'A';
+      if (score >= 4000) return 'B';
+      return 'C';
+    }
+
+    function endGame() {
+      state.running = false;
+      clearInterval(state.timeTimer);
+      clearTimeout(state.spawnTimer);
+      [...state.active.keys()].forEach((idx) => hideMole(idx));
+      stopBgm();
+      fanfare();
+
+      document.getElementById('finalScore').textContent = state.score;
+      document.getElementById('finalCombo').textContent = state.maxCombo;
+      document.getElementById('rank').textContent = judgeRank(state.score);
+      overlayEl.classList.add('show');
+      statusEl.textContent = 'タイムアップ！';
+    }
+
+    function startGame() {
+      overlayEl.classList.remove('show');
+      clearInterval(state.timeTimer);
+      clearTimeout(state.spawnTimer);
+      [...state.active.keys()].forEach((idx) => hideMole(idx));
+
+      state.running = true;
+      state.score = 0;
+      state.combo = 0;
+      state.maxCombo = 0;
+      state.timeLeft = GAME_TIME;
+      state.active.clear();
+      state.stunUntil = 0;
+      state.lastSpawnHole = -1;
+      statusEl.textContent = 'ゲーム開始！';
+      updateHUD();
+      startBgm(130);
+
+      state.timeTimer = setInterval(() => {
+        state.timeLeft -= 1;
+
+        if (state.timeLeft === 10) {
+          statusEl.textContent = 'ラスト10秒！';
+          startBgm(180);
+        }
+
+        if (state.timeLeft <= 0) {
+          state.timeLeft = 0;
+          updateHUD();
+          endGame();
+          return;
+        }
+
+        updateHUD();
+      }, 1000);
+
+      scheduleSpawn();
+    }
+
+    function resetGame() {
+      state.running = false;
+      clearInterval(state.timeTimer);
+      clearTimeout(state.spawnTimer);
+      [...state.active.keys()].forEach((idx) => hideMole(idx));
+      state.active.clear();
+      state.score = 0;
+      state.combo = 0;
+      state.maxCombo = 0;
+      state.timeLeft = GAME_TIME;
+      state.stunUntil = 0;
+      state.lastSpawnHole = -1;
+      overlayEl.classList.remove('show');
+      stopBgm();
+      statusEl.textContent = 'リセットしました';
+      updateHUD();
+    }
+
+    function ensureAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function beep(freq, dur, type = 'square', gain = 0.05, delay = 0) {
+      ensureAudio();
+      const t = audioCtx.currentTime + delay;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g);
+      g.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + dur);
+    }
+
+    function startBgm(bpm) {
+      stopBgm();
+      const notes = [262, 330, 392, 330, 294, 349, 440, 349];
+      let i = 0;
+      const step = (60_000 / bpm) / 2;
+      bgmInterval = setInterval(() => {
+        beep(notes[i % notes.length], 0.12, 'square', 0.03);
+        beep(notes[(i + 2) % notes.length] / 2, 0.2, 'triangle', 0.018);
+        i += 1;
+      }, step);
+    }
+
+    function stopBgm() {
+      if (bgmInterval) {
+        clearInterval(bgmInterval);
+        bgmInterval = null;
+      }
+    }
+
+    function fanfare() {
+      [523, 659, 784, 1047].forEach((f, i) => {
+        beep(f, 0.18, 'square', 0.06, i * 0.12);
+      });
+    }
+
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('resetBtn').addEventListener('click', resetGame);
+    document.getElementById('retryBtn').addEventListener('click', startGame);
+
+    document.addEventListener('keydown', (e) => {
+      const n = Number(e.key);
+      if (n >= 1 && n <= 9) {
+        hit(n - 1);
+      }
+    });
+
+    initBoard();
+    updateHUD();
+  </script>
+</body>
+</html>

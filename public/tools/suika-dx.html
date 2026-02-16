@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>スイカゲームDX</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: "M PLUS Rounded 1c", "Hiragino Kaku Gothic ProN", sans-serif;
+      background: radial-gradient(circle at top, #fff7bf 0%, #ffd7f4 45%, #c8f4ff 100%);
+      min-height: 100vh;
+      color: #3d3153;
+    }
+    .panel { backdrop-filter: blur(10px); }
+    #gameCanvas {
+      width: min(92vw, 420px);
+      height: calc(min(92vw, 420px) * 1.5);
+      max-height: 72vh;
+      border-radius: 24px;
+      border: 6px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 0 18px 40px rgba(106, 56, 118, 0.25);
+      background: linear-gradient(180deg, rgba(255,255,255,0.45), rgba(255,255,255,0.15));
+    }
+    .pulse { animation: pulse 0.22s ease; }
+    @keyframes pulse { from { transform: scale(1.07); } to { transform: scale(1); } }
+  </style>
+</head>
+<body class="flex flex-col items-center py-6 px-3 gap-4">
+  <h1 class="text-3xl md:text-4xl font-black tracking-wide text-fuchsia-700 drop-shadow">🍉 スイカゲームDX</h1>
+  <div class="panel w-full max-w-5xl bg-white/55 border border-white/70 rounded-3xl p-4 md:p-6 flex flex-col md:flex-row gap-5">
+    <div class="flex-1 flex justify-center relative">
+      <canvas id="gameCanvas" width="420" height="630"></canvas>
+      <div id="deadlineLabel" class="absolute text-red-500 font-bold text-xs tracking-wider" style="top: 95px; left: 50%; transform: translateX(-50%);">DEAD LINE</div>
+    </div>
+    <div class="md:w-72 space-y-3">
+      <div class="bg-white/80 rounded-2xl p-4 shadow">
+        <div class="text-sm text-purple-700">SCORE</div>
+        <div id="score" class="text-3xl font-black">0</div>
+      </div>
+      <div class="bg-white/80 rounded-2xl p-4 shadow">
+        <div class="text-sm text-purple-700">NEXT</div>
+        <div id="nextFruit" class="text-xl font-bold">🍒 さくらんぼ</div>
+      </div>
+      <div class="bg-white/80 rounded-2xl p-4 shadow">
+        <div class="text-sm text-purple-700 mb-2">モード</div>
+        <label class="flex items-center gap-2 text-sm"><input id="hardMode" type="checkbox" class="accent-fuchsia-500"> 上級（高速衝突で砕ける）</label>
+      </div>
+      <button id="restart" class="w-full py-3 rounded-xl bg-fuchsia-500 text-white font-bold hover:bg-fuchsia-600">もう一度あそぶ</button>
+      <p class="text-xs text-gray-600 leading-relaxed">
+        マウス／タッチで左右に移動、クリック／タップで落下。<br>同じフルーツがくっつくと進化！
+      </p>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const { Engine, World, Bodies, Body, Events, Runner, Composite, Vector } = Matter;
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const nextFruitEl = document.getElementById('nextFruit');
+  const restartBtn = document.getElementById('restart');
+  const hardModeEl = document.getElementById('hardMode');
+
+  const fruits = [
+    { name: 'さくらんぼ', emoji: '🍒', radius: 16, color: '#ff5fa2', score: 10, restitution: 0.58, density: 0.0009 },
+    { name: 'いちご', emoji: '🍓', radius: 22, color: '#ff4d6f', score: 20, restitution: 0.54, density: 0.0010 },
+    { name: 'ぶどう', emoji: '🍇', radius: 28, color: '#9b5de5', score: 40, restitution: 0.5, density: 0.0012 },
+    { name: 'みかん', emoji: '🍊', radius: 34, color: '#ff9f1c', score: 80, restitution: 0.47, density: 0.0014 },
+    { name: 'りんご', emoji: '🍎', radius: 40, color: '#ef233c', score: 140, restitution: 0.44, density: 0.0016 },
+    { name: 'なし', emoji: '🍐', radius: 46, color: '#8ac926', score: 220, restitution: 0.4, density: 0.0018 },
+    { name: 'もも', emoji: '🍑', radius: 53, color: '#ff7f9f', score: 320, restitution: 0.36, density: 0.0020 },
+    { name: 'パイナップル', emoji: '🍍', radius: 60, color: '#ffbe0b', score: 460, restitution: 0.3, density: 0.0022 },
+    { name: 'メロン', emoji: '🍈', radius: 68, color: '#70e000', score: 680, restitution: 0.24, density: 0.0024 },
+    { name: 'スイカ', emoji: '🍉', radius: 80, color: '#2dc653', score: 1000, restitution: 0.12, density: 0.0028 }
+  ];
+
+  let engine, runner, score, currentFruit, nextFruitType, gameOver, spawnX;
+  let drops = [], particles = [], mergeCooldown = new Map();
+  const W = canvas.width, H = canvas.height;
+  const DEADLINE = 120;
+
+  function makeFruit(x, y, typeIndex, isPreview = false) {
+    const f = fruits[typeIndex];
+    const body = Bodies.circle(x, y, f.radius, {
+      restitution: f.restitution,
+      friction: 0.06,
+      frictionAir: 0.006,
+      density: f.density,
+      label: 'fruit',
+      render: { fillStyle: f.color }
+    });
+    body.plugin = { typeIndex, born: performance.now(), preview: isPreview };
+    if (isPreview) Body.setStatic(body, true);
+    World.add(engine.world, body);
+    return body;
+  }
+
+  function spawnPreview() {
+    spawnX = W / 2;
+    currentFruit = makeFruit(spawnX, 55, nextFruitType, true);
+    nextFruitType = Math.floor(Math.random() * 5);
+    const n = fruits[nextFruitType];
+    nextFruitEl.textContent = `${n.emoji} ${n.name}`;
+  }
+
+  function dropCurrent() {
+    if (gameOver || !currentFruit) return;
+    Body.setStatic(currentFruit, false);
+    currentFruit.plugin.preview = false;
+    Body.setPosition(currentFruit, { x: spawnX, y: 55 });
+    Body.setVelocity(currentFruit, { x: 0, y: 0 });
+    drops.push({ t: performance.now(), y: 55 });
+    currentFruit = null;
+    setTimeout(() => !gameOver && spawnPreview(), 280);
+  }
+
+  function addParticles(x, y, count, color, star = false) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const speed = 1 + Math.random() * 4;
+      particles.push({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed - 1.5, life: 40 + Math.random() * 30, color, star });
+    }
+  }
+
+  function shatter(target) {
+    const idx = target.plugin.typeIndex;
+    if (idx > 2) return;
+    addParticles(target.position.x, target.position.y, 18, '#9be8ff');
+    World.remove(engine.world, target);
+    score = Math.max(0, score - 30);
+  }
+
+  function merge(a, b) {
+    const type = a.plugin.typeIndex;
+    if (type >= fruits.length - 1) return;
+    const p = Vector.mult(Vector.add(a.position, b.position), 0.5);
+    World.remove(engine.world, a);
+    World.remove(engine.world, b);
+    const merged = makeFruit(p.x, p.y, type + 1);
+    Body.setVelocity(merged, { x: (Math.random() - 0.5) * 2, y: -3.5 });
+    score += fruits[type + 1].score;
+    scoreEl.textContent = score;
+    scoreEl.classList.remove('pulse');
+    void scoreEl.offsetWidth;
+    scoreEl.classList.add('pulse');
+    addParticles(p.x, p.y, 20, '#fff06b', true);
+    Composite.allBodies(engine.world).forEach(body => {
+      if (body.label === 'fruit' && body !== merged) {
+        const d = Vector.magnitude(Vector.sub(body.position, p));
+        if (d < 120) Body.applyForce(body, body.position, Vector.mult(Vector.normalise(Vector.sub(body.position, p)), 0.0005));
+      }
+    });
+    if (type + 1 === fruits.length - 1) {
+      addParticles(p.x, p.y, 45, '#ff7ce8', true);
+      canvas.classList.add('pulse');
+      setTimeout(() => canvas.classList.remove('pulse'), 240);
+    }
+  }
+
+  function update() {
+    if (!gameOver && currentFruit) {
+      Body.setPosition(currentFruit, { x: spawnX, y: 55 + Math.sin(performance.now() / 130) * 2.2 });
+    }
+
+    const bodies = Composite.allBodies(engine.world).filter(b => b.label === 'fruit' && !b.plugin.preview);
+    let overCount = 0;
+    bodies.forEach(b => { if (b.position.y - fruits[b.plugin.typeIndex].radius < DEADLINE) overCount++; });
+    if (overCount >= 2) {
+      if (!gameOverAt) gameOverAt = performance.now();
+      if (performance.now() - gameOverAt > 1600) gameOver = true;
+    } else {
+      gameOverAt = 0;
+    }
+
+    particles = particles.filter(p => {
+      p.life -= 1;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.08;
+      return p.life > 0;
+    });
+  }
+
+  function drawFruit(body) {
+    const type = fruits[body.plugin.typeIndex];
+    const r = type.radius;
+    const squash = Math.min(1.12, 1 + Math.abs(body.velocity.y) * 0.015);
+    const stretch = 2 - squash;
+
+    ctx.save();
+    ctx.translate(body.position.x, body.position.y);
+    ctx.rotate(body.angle);
+    ctx.scale(stretch, squash);
+
+    const g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.2, 0, 0, r);
+    g.addColorStop(0, '#fff');
+    g.addColorStop(1, type.color);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = `${Math.floor(r * 0.95)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(type.emoji, 0, 1);
+    ctx.restore();
+  }
+
+  let gameOverAt = 0;
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = '#ff4d6d';
+    ctx.setLineDash([8, 7]);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(18, DEADLINE);
+    ctx.lineTo(W - 18, DEADLINE);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const fruitsOnField = Composite.allBodies(engine.world).filter(b => b.label === 'fruit');
+    fruitsOnField.forEach(drawFruit);
+
+    particles.forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.life / 60);
+      ctx.fillStyle = p.color;
+      if (p.star) {
+        ctx.translate(p.x, p.y);
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+          const a = i * Math.PI * 2 / 5;
+          ctx.lineTo(Math.cos(a) * 6, Math.sin(a) * 6);
+          ctx.lineTo(Math.cos(a + Math.PI / 5) * 2.5, Math.sin(a + Math.PI / 5) * 2.5);
+        }
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    });
+
+    if (gameOver) {
+      ctx.fillStyle = 'rgba(30, 15, 38, 0.64)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 46px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('GAME OVER', W / 2, H / 2 - 12);
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(`SCORE: ${score}`, W / 2, H / 2 + 34);
+    }
+
+    update();
+    requestAnimationFrame(render);
+  }
+
+  function setupCollisions() {
+    Events.on(engine, 'collisionActive', (event) => {
+      event.pairs.forEach(pair => {
+        const a = pair.bodyA, b = pair.bodyB;
+        if (a.label !== 'fruit' || b.label !== 'fruit') return;
+        if (a.plugin.preview || b.plugin.preview) return;
+
+        const speed = Vector.magnitude(Vector.sub(a.velocity, b.velocity));
+        if (hardModeEl.checked && speed > 10) {
+          shatter(a);
+          shatter(b);
+          return;
+        }
+
+        if (a.plugin.typeIndex !== b.plugin.typeIndex) return;
+        const key = [a.id, b.id].sort().join('-');
+        if (!mergeCooldown.has(key)) mergeCooldown.set(key, performance.now());
+        const duration = performance.now() - mergeCooldown.get(key);
+        if (duration > 130) {
+          mergeCooldown.delete(key);
+          if (Composite.get(engine.world, a.id, 'body') && Composite.get(engine.world, b.id, 'body')) merge(a, b);
+        }
+      });
+    });
+
+    Events.on(engine, 'collisionEnd', (event) => {
+      event.pairs.forEach(pair => mergeCooldown.delete([pair.bodyA.id, pair.bodyB.id].sort().join('-')));
+    });
+  }
+
+  function resetGame() {
+    if (runner) Runner.stop(runner);
+    engine = Engine.create({ gravity: { x: 0, y: 1.05 } });
+    runner = Runner.create();
+    score = 0;
+    gameOver = false;
+    gameOverAt = 0;
+    particles = [];
+    drops = [];
+    mergeCooldown = new Map();
+    scoreEl.textContent = '0';
+
+    const t = 40;
+    World.add(engine.world, [
+      Bodies.rectangle(W / 2, H + t / 2, W, t, { isStatic: true, restitution: 0.25 }),
+      Bodies.rectangle(-t / 2, H / 2, t, H, { isStatic: true }),
+      Bodies.rectangle(W + t / 2, H / 2, t, H, { isStatic: true })
+    ]);
+
+    nextFruitType = Math.floor(Math.random() * 5);
+    spawnPreview();
+    setupCollisions();
+    Runner.run(runner, engine);
+  }
+
+  function setSpawnX(clientX) {
+    const rect = canvas.getBoundingClientRect();
+    spawnX = ((clientX - rect.left) / rect.width) * W;
+    spawnX = Math.max(28, Math.min(W - 28, spawnX));
+  }
+
+  canvas.addEventListener('mousemove', (e) => setSpawnX(e.clientX));
+  canvas.addEventListener('touchmove', (e) => {
+    setSpawnX(e.touches[0].clientX);
+    e.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener('click', dropCurrent);
+  canvas.addEventListener('touchend', dropCurrent);
+  restartBtn.addEventListener('click', resetGame);
+
+  resetGame();
+  render();
+})();
+</script>
+</body>
+</html>

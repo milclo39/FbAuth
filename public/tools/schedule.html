@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スケジュール管理アプリ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .calendar-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .time-grid {
+            display: grid;
+            grid-template-columns: 60px repeat(7, 1fr);
+            min-width: 800px; /* 横スクロールを確保 */
+        }
+
+        .header-row {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .time-label {
+            border-right: 1px solid #e5e7eb;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 8px 4px;
+            text-align: right;
+            font-size: 0.875rem;
+            color: #6b7280;
+            background-color: #f9fafb;
+        }
+
+        .grid-cell {
+            border-right: 1px solid #e5e7eb;
+            border-bottom: 1px solid #e5e7eb;
+            height: 60px; /* 1時間を60pxとする */
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .grid-cell:hover {
+            background-color: #f3f4f6;
+        }
+
+        .grid-cell.current-time {
+            background-color: #e0e7ff; /* 現在時刻の強調表示 */
+        }
+
+        .schedule-item {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            right: 2px;
+            bottom: 2px;
+            background-color: #3b82f6;
+            color: white;
+            padding: 4px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            overflow: hidden;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .schedule-item:hover {
+            transform: scale(1.02);
+            z-index: 5;
+        }
+
+        /* モーダルのスタイル */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 50;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 24px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <header class="bg-white shadow-sm p-4 flex justify-between items-center z-20">
+        <div class="flex items-center space-x-4">
+            <h1 class="text-xl font-bold text-gray-800">スケジュール</h1>
+            <div class="flex space-x-2 items-center">
+                <button id="prevWeekBtn" class="p-2 rounded-full hover:bg-gray-100"><i class="fas fa-chevron-left"></i></button>
+                <button id="todayBtn" class="px-4 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm font-medium">今日</button>
+                <input type="date" id="dateSelector" class="border border-gray-300 rounded px-2 py-1 text-sm text-gray-700 cursor-pointer hover:bg-gray-50">
+                <button id="nextWeekBtn" class="p-2 rounded-full hover:bg-gray-100"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <span id="currentMonthLabel" class="text-lg font-medium text-gray-700 ml-4 hidden sm:inline"></span>
+        </div>
+        <div>
+            <button id="clearDataBtn" class="text-sm text-red-500 hover:text-red-700 underline px-4 py-2">全データ削除</button>
+        </div>
+    </header>
+
+    <div class="calendar-container" id="calendarContainer">
+        <!-- ヘッダー行（曜日・日付） -->
+        <div class="time-grid header-row" id="headerRow">
+            <div class="time-label border-none bg-white"></div> <!-- 左上の空セル -->
+            <!-- JavaScriptで動的に生成 -->
+        </div>
+
+        <!-- タイムグリッド（時間帯とセル） -->
+        <div class="time-grid" id="timeGrid">
+            <!-- JavaScriptで動的に生成 -->
+        </div>
+    </div>
+
+    <div id="scheduleModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle" class="text-xl font-bold mb-4 text-gray-800">スケジュールを追加</h2>
+            <form id="scheduleForm">
+                <input type="hidden" id="scheduleId">
+                <input type="hidden" id="scheduleDate">
+                <input type="hidden" id="scheduleHour">
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">日時</label>
+                    <p id="scheduleDateTimeLabel" class="text-gray-600 bg-gray-100 p-2 rounded"></p>
+                </div>
+
+                <div class="mb-4">
+                    <label for="scheduleTitle" class="block text-gray-700 text-sm font-bold mb-2">コメント</label>
+                    <textarea id="scheduleTitle" rows="4" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline resize-none" required placeholder="コメントを入力（Enterで改行）"></textarea>
+                </div>
+
+                <div class="flex items-center justify-between mt-6">
+                    <div>
+                        <button type="button" id="deleteBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline hidden">削除</button>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="button" id="cancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">キャンセル</button>
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">保存</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- 状態変数 ---
+            let currentDate = new Date();
+            let schedules = {}; // キー: "YYYY-MM-DD-HH", 値: { id, title }
+            const STORAGE_KEY = 'local_schedules';
+
+            // --- DOM要素 ---
+            const headerRow = document.getElementById('headerRow');
+            const timeGrid = document.getElementById('timeGrid');
+            const currentMonthLabel = document.getElementById('currentMonthLabel');
+            const calendarContainer = document.getElementById('calendarContainer');
+            const dateSelector = document.getElementById('dateSelector');
+            
+            // モーダル関連
+            const modal = document.getElementById('scheduleModal');
+            const scheduleForm = document.getElementById('scheduleForm');
+            const modalTitleEl = document.getElementById('modalTitle');
+            const scheduleIdInput = document.getElementById('scheduleId');
+            const scheduleDateInput = document.getElementById('scheduleDate');
+            const scheduleHourInput = document.getElementById('scheduleHour');
+            const scheduleTitleInput = document.getElementById('scheduleTitle');
+            const scheduleDateTimeLabel = document.getElementById('scheduleDateTimeLabel');
+            const cancelBtn = document.getElementById('cancelBtn');
+            const deleteBtn = document.getElementById('deleteBtn');
+
+            // --- STREAMING_CHUNK:初期化とデータ読み込み ---
+            init();
+
+            function init() {
+                loadSchedules();
+                renderCalendar();
+                setupEventListeners();
+                
+                // 9時(インデックス9)の少し上にスクロール
+                setTimeout(() => {
+                    const rowHeight = 60; // .grid-cell の高さ
+                    calendarContainer.scrollTop = (9 * rowHeight) - 20;
+                }, 100);
+            }
+
+            function loadSchedules() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    try {
+                        schedules = JSON.parse(stored);
+                    } catch (e) {
+                        console.error('データの読み込みに失敗しました', e);
+                        schedules = {};
+                    }
+                }
+            }
+
+            function saveSchedules() {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(schedules));
+            }
+
+            // --- STREAMING_CHUNK:カレンダーの描画ロジック ---
+            function renderCalendar() {
+                // 現在表示中の週の開始日（日曜日）を取得
+                const startOfWeek = getStartOfWeek(currentDate);
+                
+                // 月表示と日付ピッカーの更新
+                currentMonthLabel.textContent = `${startOfWeek.getFullYear()}年 ${startOfWeek.getMonth() + 1}月`;
+                dateSelector.value = formatDate(currentDate);
+
+                // ヘッダー（曜日・日付）の描画
+                let headerHtml = '<div class="time-label border-none bg-white"></div>';
+                const days = ['日', '月', '火', '水', '木', '金', '土'];
+                
+                const today = new Date();
+                today.setHours(0,0,0,0);
+
+                for (let i = 0; i < 7; i++) {
+                    const date = new Date(startOfWeek);
+                    date.setDate(startOfWeek.getDate() + i);
+                    date.setHours(0,0,0,0);
+                    
+                    const isToday = date.getTime() === today.getTime();
+                    const dayClass = isToday ? 'text-blue-600 font-bold bg-blue-50' : 'text-gray-700 bg-gray-50';
+                    const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+                    
+                    headerHtml += `
+                        <div class="text-center py-2 border-r border-b border-gray-200 ${dayClass}">
+                            <div class="text-xs">${days[i]}</div>
+                            <div class="text-xl">${date.getDate()}</div>
+                        </div>
+                    `;
+                }
+                headerRow.innerHTML = headerHtml;
+
+                // タイムグリッドの描画
+                let gridHtml = '';
+                const currentNow = new Date();
+                const currentHourNum = currentNow.getHours();
+                const currentDayTime = new Date(currentNow);
+                currentDayTime.setHours(0,0,0,0);
+
+                for (let hour = 0; hour < 24; hour++) {
+                    // 時間ラベル
+                    gridHtml += `<div class="time-label">${hour}:00</div>`;
+                    
+                    // 各曜日のセル
+                    for (let day = 0; day < 7; day++) {
+                        const cellDate = new Date(startOfWeek);
+                        cellDate.setDate(startOfWeek.getDate() + day);
+                        const dateString = formatDate(cellDate);
+                        const key = `${dateString}-${hour}`;
+                        
+                        // 現在日時の判定
+                        cellDate.setHours(0,0,0,0);
+                        const isCurrentTime = (cellDate.getTime() === currentDayTime.getTime() && hour === currentHourNum);
+                        const cellClass = isCurrentTime ? 'grid-cell current-time' : 'grid-cell';
+
+                        gridHtml += `
+                            <div class="${cellClass}" data-date="${dateString}" data-hour="${hour}" onclick="openModal('${dateString}', ${hour})">
+                                ${renderScheduleItem(key)}
+                            </div>
+                        `;
+                    }
+                }
+                timeGrid.innerHTML = gridHtml;
+            }
+
+            function renderScheduleItem(key) {
+                const schedule = schedules[key];
+                if (schedule) {
+                    // white-space: pre-wrap; の影響を防ぐため、1行で記述して余計なインデントや改行を排除します
+                    return `<div class="schedule-item" onclick="event.stopPropagation(); openModal('${key.substring(0, 10)}', ${key.substring(11)}, true)">${escapeHtml(schedule.title)}</div>`;
+                }
+                return '';
+            }
+
+            // --- STREAMING_CHUNK:ユーティリティとイベントハンドラ ---
+            function getStartOfWeek(date) {
+                const d = new Date(date);
+                const day = d.getDay();
+                const diff = d.getDate() - day;
+                return new Date(d.setDate(diff));
+            }
+
+            function formatDate(date) {
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+
+            function escapeHtml(unsafe) {
+                return unsafe
+                     .replace(/&/g, "&amp;")
+                     .replace(/</g, "&lt;")
+                     .replace(/>/g, "&gt;")
+                     .replace(/"/g, "&quot;")
+                     .replace(/'/g, "&#039;");
+            }
+
+            // モーダル操作
+            window.openModal = function(dateStr, hour, isEdit = false) {
+                const key = `${dateStr}-${hour}`;
+                scheduleDateInput.value = dateStr;
+                scheduleHourInput.value = hour;
+                
+                const displayDate = new Date(dateStr);
+                const days = ['日', '月', '火', '水', '木', '金', '土'];
+                scheduleDateTimeLabel.textContent = `${displayDate.getFullYear()}年${displayDate.getMonth()+1}月${displayDate.getDate()}日(${days[displayDate.getDay()]}) ${hour}:00 - ${hour+1}:00`;
+
+                if (isEdit && schedules[key]) {
+                    modalTitleEl.textContent = 'スケジュールの編集';
+                    scheduleIdInput.value = schedules[key].id;
+                    scheduleTitleInput.value = schedules[key].title;
+                    deleteBtn.classList.remove('hidden');
+                } else {
+                    modalTitleEl.textContent = 'スケジュールを追加';
+                    scheduleIdInput.value = Date.now().toString();
+                    scheduleTitleInput.value = '';
+                    deleteBtn.classList.add('hidden');
+                }
+
+                modal.classList.add('active');
+                scheduleTitleInput.focus();
+            };
+
+            function closeModal() {
+                modal.classList.remove('active');
+                scheduleForm.reset();
+            }
+
+            // イベントリスナーの設定
+            function setupEventListeners() {
+                document.getElementById('prevWeekBtn').addEventListener('click', () => {
+                    currentDate.setDate(currentDate.getDate() - 7);
+                    renderCalendar();
+                });
+
+                document.getElementById('nextWeekBtn').addEventListener('click', () => {
+                    currentDate.setDate(currentDate.getDate() + 7);
+                    renderCalendar();
+                });
+
+                document.getElementById('todayBtn').addEventListener('click', () => {
+                    currentDate = new Date();
+                    renderCalendar();
+                });
+
+                dateSelector.addEventListener('change', (e) => {
+                    if (e.target.value) {
+                        currentDate = new Date(e.target.value);
+                        renderCalendar();
+                    }
+                });
+
+                document.getElementById('clearDataBtn').addEventListener('click', () => {
+                    if (confirm('すべてのスケジュールデータを削除しますか？この操作は取り消せません。')) {
+                        localStorage.removeItem(STORAGE_KEY);
+                        schedules = {};
+                        renderCalendar();
+                    }
+                });
+
+                cancelBtn.addEventListener('click', closeModal);
+
+                // モーダル外クリックで閉じる
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) closeModal();
+                });
+
+                // フォーム送信（保存）
+                scheduleForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const dateStr = scheduleDateInput.value;
+                    const hour = scheduleHourInput.value;
+                    const title = scheduleTitleInput.value.trim();
+                    const id = scheduleIdInput.value;
+
+                    if (!title) return;
+
+                    const key = `${dateStr}-${hour}`;
+                    schedules[key] = { id, title };
+                    
+                    saveSchedules();
+                    renderCalendar();
+                    closeModal();
+                });
+
+                // 削除
+                deleteBtn.addEventListener('click', () => {
+                    const dateStr = scheduleDateInput.value;
+                    const hour = scheduleHourInput.value;
+                    const key = `${dateStr}-${hour}`;
+                    
+                    if (confirm('このスケジュールを削除しますか？')) {
+                        delete schedules[key];
+                        saveSchedules();
+                        renderCalendar();
+                        closeModal();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

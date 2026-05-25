@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スクショ即保存ツール</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            margin: 0;
+        }
+        #drop-zone {
+            background-color: #ffffff;
+            border: 3px dashed #4CAF50;
+            border-radius: 12px;
+            padding: 50px 30px;
+            text-align: center;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            transition: background-color 0.2s;
+        }
+        #drop-zone p {
+            font-size: 1.2rem;
+            margin: 10px 0;
+        }
+        .key {
+            background-color: #eee;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+        #preview-container {
+            margin-top: 30px;
+            text-align: center;
+            width: 100%;
+            max-width: 800px;
+        }
+        #preview-container img {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 8px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+            margin-top: 15px;
+        }
+        .toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 2px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            bottom: 30px;
+            font-size: 17px;
+        }
+        .toast.show {
+            visibility: visible;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+    </style>
+</head>
+<body>
+
+    <div id="drop-zone">
+        <h2>📷 スクリーンショット保存ツール</h2>
+        <p>この画面を開いた状態で、</p>
+        <p><span class="key">Ctrl</span> + <span class="key">V</span> を押してください。</p>
+        <p style="font-size: 0.9rem; color: #666; margin-top: 20px;">※Macの場合は <span class="key">Command</span> + <span class="key">V</span></p>
+    </div>
+
+    <div id="preview-container">
+        </div>
+
+    <div id="toast" class="toast">画像を保存しました！</div>
+
+    <script>
+        // ペーストイベントを監視
+        document.addEventListener('paste', function(e) {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            let imagePasted = false;
+
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') === 0) {
+                    const blob = items[i].getAsFile();
+                    if (blob !== null) {
+                        saveImage(blob);
+                        showPreview(blob);
+                        showToast();
+                        imagePasted = true;
+                        break; // 最初の画像のみ処理
+                    }
+                }
+            }
+
+            if (!imagePasted) {
+                alert("クリップボードに画像が見つかりませんでした。スクリーンショットを撮ってから再度お試しください。");
+            }
+        });
+
+        // 画像をダウンロードさせる関数
+        function saveImage(blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            
+            // ファイル名を日時で自動生成 (例: screenshot_20260525_085957.png)
+            const now = new Date();
+            const timestamp = now.getFullYear() +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + "_" +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
+            
+            a.download = `screenshot_${timestamp}.png`;
+            document.body.appendChild(a);
+            a.click();
+            
+            // 後片付け
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+        }
+
+        // プレビューを表示する関数
+        function showPreview(blob) {
+            const url = URL.createObjectURL(blob);
+            const previewContainer = document.getElementById('preview-container');
+            previewContainer.innerHTML = `<p style="color: #666; font-weight: bold;">最後に保存した画像プレビュー:</p><img src="${url}" alt="保存された画像">`;
+        }
+
+        // 通知を表示する関数
+        function showToast() {
+            const toast = document.getElementById("toast");
+            toast.className = "toast show";
+            setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+    </script>
+
+</body>
+</html>

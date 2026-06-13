@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Web Media Player</title>
+    <link rel="icon" href="icon.png">
+    <link rel="manifest" href="manifest.json">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* ===== リセット & 基本 ===== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-950: #030712;   /* gray-950 */
+            --bg-900: #111827;   /* gray-900 */
+            --bg-800: #1f2937;   /* gray-800 */
+            --bg-700: #374151;   /* gray-700 */
+            --gray-600: #4b5563;
+            --gray-500: #6b7280;
+            --gray-400: #9ca3af;
+            --gray-300: #d1d5db;
+            --gray-200: #e5e7eb;
+            --gray-100: #f3f4f6;
+            --indigo-500: #6366f1;
+            --indigo-400: #818cf8;
+        }
+
+        html, body { height: 100%; }
+
+        body {
+            background: var(--bg-950);
+            color: var(--gray-100);
+            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        ::selection { background: var(--indigo-500); color: #fff; }
+
+        /* ===== 外枠（プレイヤーカード） ===== */
+        .player-card {
+            width: 100%;
+            max-width: 28rem;            /* max-w-md */
+            background: var(--bg-900);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid var(--bg-800);
+            position: relative;
+        }
+        @media (min-width: 640px) {       /* sm: */
+            .player-card {
+                height: 85vh;
+                border-radius: 1rem;
+                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6);
+            }
+        }
+
+        /* ===== ヘッダー ===== */
+        .header {
+            padding: 1rem 1.5rem;
+            text-align: center;
+            border-bottom: 1px solid var(--bg-800);
+            background: rgba(17,24,39,0.8);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 10;
+        }
+        .header h1 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: var(--gray-200);
+        }
+
+        /* ===== プレイヤーエリア ===== */
+        .player-area { padding: 1.5rem; flex-shrink: 0; }
+
+        .media-frame {
+            position: relative;
+            background: #000;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.5);
+            border: 1px solid var(--bg-800);
+        }
+        #media-player {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* 音声ポスター（♪） */
+        .audio-poster {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom right, var(--bg-800), var(--bg-900));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s;
+        }
+        .audio-poster.hidden { display: none; }
+        .poster-circle {
+            width: 5rem;
+            height: 5rem;
+            background: var(--bg-800);
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4);
+            border: 1px solid var(--bg-700);
+        }
+        .poster-circle i { font-size: 2.25rem; color: var(--indigo-400); }
+
+        /* 曲名・ファイル名 */
+        .track-info { margin-top: 1.5rem; text-align: center; }
+        .track-info h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .track-info p {
+            font-size: 0.875rem;
+            color: var(--gray-400);
+            margin-top: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ===== シークバー ===== */
+        .seek-wrap { margin-top: 1.25rem; }
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 14px;
+            width: 14px;
+            border-radius: 50%;
+            background: var(--indigo-400);
+            cursor: pointer;
+            margin-top: -5px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: var(--gray-600);
+            border-radius: 2px;
+        }
+        input[type=range]::-moz-range-thumb {
+            height: 14px;
+            width: 14px;
+            border: none;
+            border-radius: 50%;
+            background: var(--indigo-400);
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-moz-range-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: var(--gray-600);
+            border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        .time-row {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.25rem;
+            font-size: 0.75rem;
+            color: var(--gray-400);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        /* ===== コントロールボタン ===== */
+        .controls {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 1rem;
+        }
+        .controls button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .center-controls {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        #btn-loop {
+            padding: 0.5rem;
+            color: var(--gray-500);
+            transition: color 0.15s;
+        }
+        #btn-loop:hover { color: var(--indigo-400); }
+        #btn-loop i { font-size: 1.125rem; }
+        #btn-loop.active { color: var(--indigo-400); }
+
+        #btn-prev, #btn-next {
+            color: var(--gray-300);
+            font-size: 1.5rem;
+            transition: transform 0.1s, color 0.15s;
+        }
+        #btn-prev:hover, #btn-next:hover { color: #fff; }
+        #btn-prev:active, #btn-next:active, #btn-play:active { transform: scale(0.95); }
+
+        #btn-play {
+            color: var(--indigo-500);
+            font-size: 3rem;
+            transition: transform 0.1s, color 0.15s;
+        }
+        #btn-play:hover { color: var(--indigo-400); }
+        .drop-shadow { filter: drop-shadow(0 4px 3px rgba(0,0,0,0.4)); }
+
+        .spacer { width: 2rem; }
+
+        /* ===== プレイリスト ===== */
+        .playlist-area {
+            flex: 1;
+            overflow-y: auto;
+            border-top: 1px solid var(--bg-800);
+            background: rgba(17,24,39,0.5);
+            padding: 1rem;
+        }
+        .playlist-area::-webkit-scrollbar { display: none; }
+        .playlist-area { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .playlist-area h3 {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--gray-500);
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 0 0.5rem;
+        }
+        #playlist-container { list-style: none; }
+        #playlist-container li { margin-bottom: 0.5rem; }
+
+        /* プレイリスト項目 */
+        .track {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            border: 1px solid transparent;
+            transition: background 0.15s, border-color 0.15s;
+            cursor: pointer;
+            user-select: none;
+            background: transparent;
+        }
+        .track:hover { background: rgba(31,41,55,0.5); }
+        .track.active {
+            background: var(--bg-800);
+            border-color: rgba(99,102,241,0.5);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+        }
+
+        .track-thumb-img,
+        .track-thumb-icon {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 0.375rem;
+            box-shadow: 0 1px 2px 0 rgba(0,0,0,0.4);
+            border: 1px solid var(--bg-700);
+            flex-shrink: 0;
+        }
+        .track-thumb-img { object-fit: cover; }
+        .track-thumb-icon {
+            background: var(--bg-800);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .track-thumb-icon i { color: var(--gray-400); font-size: 1.125rem; }
+
+        .track-meta { flex: 1; min-width: 0; }
+        .track-meta .t-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-200);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .track-meta .t-src {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 0.125rem;
+        }
+
+        .track-state {
+            width: 1.5rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* 再生中のイコライザーアニメーション */
+        .eq {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.25rem;
+            height: 1rem;
+        }
+        .eq span {
+            width: 0.25rem;
+            background: var(--indigo-400);
+            border-radius: 1px;
+            animation: eq-bounce 1s infinite ease-in-out;
+        }
+        .eq span:nth-child(1) { height: 100%; animation-delay: 0s; }
+        .eq span:nth-child(2) { height: 66%;  animation-delay: 0.2s; }
+        .eq span:nth-child(3) { height: 80%;  animation-delay: 0.4s; }
+        @keyframes eq-bounce {
+            0%, 100% { transform: scaleY(0.4); transform-origin: bottom; }
+            50%      { transform: scaleY(1);   transform-origin: bottom; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="player-card">
+
+        <!-- ヘッダー -->
+        <header class="header">
+            <h1>WEB PLAYER</h1>
+        </header>
+
+        <!-- プレイヤーエリア -->
+        <div class="player-area">
+            <!-- ビデオ/オーディオ表示枠 -->
+            <div class="media-frame">
+                <!-- playsinline によりスマホでの自動フルスクリーンを防止 -->
+                <video id="media-player" playsinline webkit-playsinline></video>
+
+                <!-- 音声ファイル再生時に表示するポスター（♪マーク） -->
+                <div id="audio-poster" class="audio-poster">
+                    <div class="poster-circle">
+                        <i class="fas fa-music"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 曲名・ファイル名表示 -->
+            <div class="track-info">
+                <h2 id="current-title">Select a track</h2>
+                <p id="current-filename">---</p>
+            </div>
+
+            <!-- シークバー -->
+            <div class="seek-wrap">
+                <input type="range" id="seek-bar" value="0" min="0" max="100">
+                <div class="time-row">
+                    <span id="time-current">0:00</span>
+                    <span id="time-total">0:00</span>
+                </div>
+            </div>
+
+            <!-- コントロールボタン -->
+            <div class="controls">
+                <!-- ループ切り替えボタン -->
+                <button id="btn-loop" title="Loop (1 Track)">
+                    <i class="fas fa-repeat"></i>
+                </button>
+
+                <div class="center-controls">
+                    <button id="btn-prev">
+                        <i class="fas fa-backward-step"></i>
+                    </button>
+                    <!-- 再生/一時停止ボタン -->
+                    <button id="btn-play">
+                        <i class="fas fa-circle-play drop-shadow"></i>
+                    </button>
+                    <button id="btn-next">
+                        <i class="fas fa-forward-step"></i>
+                    </button>
+                </div>
+
+                <!-- インジケーター用スペース -->
+                <div class="spacer"></div>
+            </div>
+        </div>
+
+        <!-- プレイリストエリア（スクロール可能） -->
+        <div class="playlist-area">
+            <h3>Playlist</h3>
+            <ul id="playlist-container">
+                <!-- JavaScriptで動的に生成されます -->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js')
+            .then(() => console.log("sw_ok"))
+            .catch(err => console.error("sw_err:", err));
+    }
+        // --- 1. データ定義（プレイリスト） ---
+        // 要件に従い1.mp3〜3.mp3を登録。動作確認用にmp4も一つ登録しています。
+        const playlist = [
+            { id: 1, type: 'audio', title: 'Track 1', src: 'http://miclobox.web.app/musics/柴、ときどき爆走.mp3', thumb: '' },
+            { id: 2, type: 'audio', title: 'Track 2', src: 'http://miclobox.web.app/musics/腐った指先を突き上げろ.mp3', thumb: '' },
+            { id: 3, type: 'audio', title: 'Track 3', src: 'http://miclobox.web.app/musics/腐っても踊れ.mp3', thumb: '' },
+            { id: 4, type: 'audio', title: 'Track 4', src: 'http://miclobox.web.app/musics/墓場で踊る黙示録.mp3', thumb: '' },
+            { id: 5, type: 'audio', title: 'Track 5', src: 'http://miclobox.web.app/musics/路地裏の掟.mp3', thumb: '' },
+            { id: 6, type: 'audio', title: 'Track 6', src: 'http://miclobox.web.app/musics/修羅の祭囃子.mp3', thumb: '' },
+            { id: 7, type: 'audio', title: 'Track 7', src: 'http://miclobox.web.app/musics/修羅の宴.mp3', thumb: '' },
+            { id: 8, type: 'audio', title: 'Track 8', src: 'http://miclobox.web.app/musics/真紅のルージュ.mp3', thumb: '' },
+
+            // テスト用動画（サムネイル画像ありの例）
+            { id: 99, type: 'video', title: 'Sample Movie', src: 'https://www.w3schools.com/html/mov_bbb.mp4', thumb: 'https://placehold.co/150x150/4f46e5/ffffff?text=MP4' }
+        ];
+
+        // --- 2. DOM要素の取得 ---
+        const player = document.getElementById('media-player');
+        const audioPoster = document.getElementById('audio-poster');
+        const titleEl = document.getElementById('current-title');
+        const filenameEl = document.getElementById('current-filename');
+        const playlistContainer = document.getElementById('playlist-container');
+
+        const btnPlay = document.getElementById('btn-play');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnLoop = document.getElementById('btn-loop');
+
+        const seekBar = document.getElementById('seek-bar');
+        const timeCurrent = document.getElementById('time-current');
+        const timeTotal = document.getElementById('time-total');
+
+        // --- 3. 状態管理変数 ---
+        let currentIndex = 0;
+        let isPlaying = false;
+        let isSingleLoop = false;
+        let isDragging = false; // シークバー操作中判定
+
+        // 簡易エスケープ（タイトル/ファイル名のHTML差し込み対策）
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // --- 4. プレイリストの描画処理 ---
+        function renderPlaylist() {
+            playlistContainer.innerHTML = '';
+
+            playlist.forEach((item, index) => {
+                const li = document.createElement('li');
+                const isActive = index === currentIndex;
+
+                // サムネイルの生成（mp4は画像、mp3は♪アイコン）
+                let thumbHtml = '';
+                if (item.type === 'video' || item.thumb) {
+                    const imgSrc = item.thumb || 'https://placehold.co/100x100/333/fff?text=Video';
+                    thumbHtml = `<img src="${escapeHtml(imgSrc)}" alt="thumb" class="track-thumb-img">`;
+                } else {
+                    thumbHtml = `
+                        <div class="track-thumb-icon">
+                            <i class="fas fa-music"></i>
+                        </div>`;
+                }
+
+                // 再生中アイコン（イコライザー）
+                const playingIcon = (isActive && isPlaying)
+                    ? `<div class="eq"><span></span><span></span><span></span></div>`
+                    : '';
+
+                li.className = 'track' + (isActive ? ' active' : '');
+                li.innerHTML = `
+                    ${thumbHtml}
+                    <div class="track-meta">
+                        <p class="t-title">${escapeHtml(item.title)}</p>
+                        <p class="t-src">${escapeHtml(item.src)}</p>
+                    </div>
+                    <div class="track-state">
+                        ${playingIcon}
+                    </div>
+                `;
+
+                // タップでその曲を再生
+                li.onclick = () => {
+                    currentIndex = index;
+                    loadMedia();
+                    playMedia();
+                };
+
+                playlistContainer.appendChild(li);
+            });
+        }
+
+        // --- 5. メディア制御ロジック ---
+
+        // メディアを読み込む
+        function loadMedia() {
+            const item = playlist[currentIndex];
+            player.src = item.src;
+            titleEl.textContent = item.title;
+            filenameEl.textContent = item.src;
+
+            // 音声ならポスター（♪）を表示、動画なら隠す
+            if (item.type === 'audio') {
+                audioPoster.classList.remove('hidden');
+            } else {
+                audioPoster.classList.add('hidden');
+            }
+
+            // シークバーのリセット
+            seekBar.value = 0;
+            timeCurrent.textContent = "0:00";
+            timeTotal.textContent = "0:00";
+
+            renderPlaylist();
+        }
+
+        // 再生する
+        function playMedia() {
+            player.play().then(() => {
+                isPlaying = true;
+                updatePlayButton();
+                renderPlaylist();
+            }).catch(e => {
+                console.error("Playback failed:", e);
+                // ファイルが無い等のエラー時
+                titleEl.textContent = "再生エラー (File Not Found)";
+                isPlaying = false;
+                updatePlayButton();
+            });
+        }
+
+        // 一時停止する
+        function pauseMedia() {
+            player.pause();
+            isPlaying = false;
+            updatePlayButton();
+            renderPlaylist();
+        }
+
+        // 再生/一時停止を切り替える
+        function togglePlay() {
+            if (isPlaying) {
+                pauseMedia();
+            } else {
+                playMedia();
+            }
+        }
+
+        // 次の曲へ（シーケンス再生）
+        function playNext() {
+            currentIndex++;
+            if (currentIndex >= playlist.length) {
+                currentIndex = 0; // リストの最後まで行ったら最初に戻る
+            }
+            loadMedia();
+            playMedia();
+        }
+
+        // 前の曲へ
+        function playPrev() {
+            // 再生時間が3秒以上経過している場合は、曲の先頭に戻す
+            if (player.currentTime > 3) {
+                player.currentTime = 0;
+                return;
+            }
+            currentIndex--;
+            if (currentIndex < 0) {
+                currentIndex = playlist.length - 1;
+            }
+            loadMedia();
+            playMedia();
+        }
+
+        // UIボタンの更新
+        function updatePlayButton() {
+            if (isPlaying) {
+                btnPlay.innerHTML = '<i class="fas fa-circle-pause drop-shadow"></i>';
+            } else {
+                btnPlay.innerHTML = '<i class="fas fa-circle-play drop-shadow"></i>';
+            }
+        }
+
+        // --- 6. イベントリスナー ---
+
+        // ボタン操作
+        btnPlay.addEventListener('click', togglePlay);
+        btnNext.addEventListener('click', playNext);
+        btnPrev.addEventListener('click', playPrev);
+
+        // ループ切り替えボタン（1曲ループ）
+        btnLoop.addEventListener('click', () => {
+            isSingleLoop = !isSingleLoop;
+            btnLoop.classList.toggle('active', isSingleLoop);
+        });
+
+        // 曲が終了した時の自動処理（シーケンス再生の肝）
+        player.addEventListener('ended', () => {
+            if (isSingleLoop) {
+                // 1曲ループONなら同じ曲を最初から再生
+                player.currentTime = 0;
+                playMedia();
+            } else {
+                // OFFなら次の曲へ
+                playNext();
+            }
+        });
+
+        // 時間表示のフォーマット（秒 -> M:SS）
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return "0:00";
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // メタデータ読み込み時（総時間の取得）
+        player.addEventListener('loadedmetadata', () => {
+            timeTotal.textContent = formatTime(player.duration);
+            seekBar.max = Math.floor(player.duration);
+        });
+
+        // 再生中の時間更新（シークバーと現在時間の表示）
+        player.addEventListener('timeupdate', () => {
+            if (!isDragging) {
+                seekBar.value = Math.floor(player.currentTime);
+                timeCurrent.textContent = formatTime(player.currentTime);
+            }
+        });
+
+        // ユーザーによるシークバー操作
+        seekBar.addEventListener('mousedown', () => isDragging = true);
+        seekBar.addEventListener('touchstart', () => isDragging = true, {passive: true});
+
+        seekBar.addEventListener('input', () => {
+            timeCurrent.textContent = formatTime(seekBar.value);
+        });
+
+        seekBar.addEventListener('mouseup', () => {
+            isDragging = false;
+            player.currentTime = seekBar.value;
+        });
+        seekBar.addEventListener('touchend', () => {
+            isDragging = false;
+            player.currentTime = seekBar.value;
+        });
+
+        // --- 7. 初期化処理 ---
+        loadMedia();
+
+    </script>
+</body>
+</html>

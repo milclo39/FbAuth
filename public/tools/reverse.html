@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>逆再生ループメーカー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #101319;
+    --bg2:       #181c24;
+    --bg3:       #1f2530;
+    --border:    #2a313d;
+    --border-lit:#3a4452;
+    --text:      #e9e7e1;
+    --muted:     #8b92a0;
+    --fwd:       #2fd6be;  /* 順再生 */
+    --rev:       #ffb454;  /* 逆再生 */
+    --warn:      #ff6b6b;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --disp: 'Bricolage Grotesque', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    --body: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 32px 20px 64px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  /* ---------- header ---------- */
+  header { margin-bottom: 28px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  h1 {
+    font-family: var(--disp);
+    font-weight: 700;
+    font-size: 34px;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+  }
+  h1 .fwd { color: var(--fwd); }
+  h1 .rev { color: var(--rev); }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 10px; max-width: 52ch; }
+
+  /* ---------- loop diagram (signature) ---------- */
+  .diagram {
+    margin: 24px 0 28px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg2);
+    padding: 18px 18px 14px;
+  }
+  .track {
+    position: relative;
+    height: 22px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: linear-gradient(90deg,
+      color-mix(in srgb, var(--fwd) 22%, transparent) 0%,
+      color-mix(in srgb, var(--fwd) 22%, transparent) 50%,
+      color-mix(in srgb, var(--rev) 22%, transparent) 50%,
+      color-mix(in srgb, var(--rev) 22%, transparent) 100%);
+  }
+  .track .seam {
+    position: absolute; top: 0; left: 50%;
+    width: 1px; height: 100%;
+    background: var(--border-lit);
+  }
+  .playhead {
+    position: absolute; top: -3px; left: 0;
+    width: 4px; height: 28px; border-radius: 2px;
+    background: var(--text);
+    box-shadow: 0 0 10px rgba(255,255,255,.4);
+    animation: pingpong 3.2s cubic-bezier(.45,0,.55,1) infinite alternate;
+  }
+  @keyframes pingpong {
+    from { left: 0; }
+    to   { left: calc(100% - 4px); }
+  }
+  .track-labels {
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 11px;
+    margin-top: 10px; color: var(--muted);
+  }
+  .track-labels .l-fwd { color: var(--fwd); }
+  .track-labels .l-rev { color: var(--rev); }
+  @media (prefers-reduced-motion: reduce) {
+    .playhead { animation: none; left: calc(50% - 2px); }
+  }
+
+  /* ---------- dropzone ---------- */
+  .dropzone {
+    border: 1.5px dashed var(--border-lit);
+    border-radius: 14px;
+    background: var(--bg2);
+    padding: 44px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .dropzone:hover { border-color: var(--fwd); }
+  .dropzone.drag {
+    border-color: var(--fwd);
+    background: color-mix(in srgb, var(--fwd) 8%, var(--bg2));
+  }
+  .dz-icon { font-size: 30px; margin-bottom: 6px; }
+  .dz-main { font-size: 15px; }
+  .dz-sub { color: var(--muted); font-size: 13px; margin-top: 6px; font-family: var(--mono); }
+  .browse { color: var(--fwd); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* ---------- panel / controls ---------- */
+  .panel {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg2);
+    padding: 20px;
+    margin-top: 18px;
+  }
+  .panel.hidden, .dropzone.hidden, .result.hidden { display: none; }
+
+  .src-row { display: flex; gap: 16px; align-items: flex-start; }
+  .src-row video {
+    width: 168px; height: auto; border-radius: 8px;
+    background: #000; border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .meta { flex: 1; min-width: 0; }
+  .meta .fname {
+    font-size: 14px; word-break: break-all; margin-bottom: 10px;
+  }
+  .meta dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-family: var(--mono); font-size: 12.5px; }
+  .meta dt { color: var(--muted); }
+  .meta dd { color: var(--text); }
+  .meta .warn { color: var(--warn); }
+
+  .field { margin-top: 20px; }
+  .field > label {
+    display: block; font-size: 12px; font-family: var(--mono);
+    letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button {
+    font-family: var(--mono); font-size: 13px;
+    padding: 7px 13px; border-radius: 8px;
+    border: 1px solid var(--border-lit);
+    background: var(--bg3); color: var(--text);
+    cursor: pointer; transition: all .12s;
+  }
+  .seg button:hover { border-color: var(--muted); }
+  .seg button.on {
+    background: var(--text); color: var(--bg);
+    border-color: var(--text); font-weight: 500;
+  }
+
+  .toggle-row { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+  .toggle-row input { width: 16px; height: 16px; accent-color: var(--fwd); }
+  .toggle-row label { font-size: 13.5px; cursor: pointer; }
+  .toggle-row .hint { color: var(--muted); font-size: 12px; }
+
+  .actions { display: flex; gap: 10px; margin-top: 24px; align-items: center; flex-wrap: wrap; }
+  .btn-primary {
+    font-family: var(--disp); font-weight: 700; font-size: 15px;
+    padding: 11px 26px; border-radius: 10px; border: none;
+    background: var(--fwd); color: var(--bg); cursor: pointer;
+    transition: opacity .12s, transform .05s;
+  }
+  .btn-primary:hover { opacity: .9; }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-ghost {
+    font-family: var(--body); font-size: 13.5px;
+    padding: 10px 16px; border-radius: 10px;
+    border: 1px solid var(--border-lit); background: transparent;
+    color: var(--muted); cursor: pointer;
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .engine {
+    font-family: var(--mono); font-size: 11.5px;
+    color: var(--muted); margin-left: auto;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.ready { background: var(--fwd); }
+  .dot.loading { background: var(--rev); animation: pulse 1s infinite; }
+  .dot.err { background: var(--warn); }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  /* ---------- progress ---------- */
+  .progress { margin-top: 20px; }
+  .progress.hidden { display: none; }
+  .bar { height: 8px; border-radius: 4px; background: var(--bg3); overflow: hidden; }
+  .bar > i {
+    display: block; height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--fwd), var(--rev));
+    transition: width .2s;
+  }
+  .progress .label { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* ---------- result ---------- */
+  .result { margin-top: 18px; }
+  .result video {
+    width: 100%; border-radius: 12px; background: #000;
+    border: 1px solid var(--border);
+  }
+  .result .rmeta {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--mono); font-size: 12.5px; color: var(--muted);
+    margin: 12px 0 14px;
+  }
+  .dl {
+    display: inline-block; font-family: var(--disp); font-weight: 700;
+    font-size: 15px; padding: 11px 26px; border-radius: 10px;
+    background: var(--rev); color: var(--bg); text-decoration: none;
+  }
+  .dl:hover { opacity: .9; }
+
+  /* ---------- error ---------- */
+  .error {
+    margin-top: 18px; padding: 16px 18px; border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+    background: color-mix(in srgb, var(--warn) 10%, var(--bg2));
+    font-size: 13.5px;
+  }
+  .error.hidden { display: none; }
+  .error b { color: var(--warn); }
+  .error code { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  footer { margin-top: 36px; color: var(--muted); font-size: 12px; font-family: var(--mono); line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">loop · boomerang · web only</div>
+    <h1><span class="fwd">順</span>に進んで <span class="rev">逆</span>に戻る</h1>
+    <p class="sub">短いアニメを順再生→逆再生でつなぎ、元の位置に戻るループ動画を作ります。音声なし・ブラウザ内処理。アップロードしたファイルはどこにも送信されません。</p>
+  </header>
+
+  <div class="diagram" aria-hidden="true">
+    <div class="track">
+      <div class="seam"></div>
+      <div class="playhead"></div>
+    </div>
+    <div class="track-labels">
+      <span class="l-fwd">▶ 順再生</span>
+      <span>つなぎ目</span>
+      <span class="l-rev">◀ 逆再生</span>
+    </div>
+  </div>
+
+  <!-- dropzone -->
+  <div class="dropzone" id="dropzone">
+    <div class="dz-icon">⤵</div>
+    <div class="dz-main">動画をここにドロップ、または <span class="browse">ファイルを選択</span></div>
+    <div class="dz-sub">mp4 / webm / mov ・ 5秒以内推奨</div>
+    <input type="file" id="fileInput" accept="video/*" hidden>
+  </div>
+
+  <!-- controls -->
+  <div class="panel hidden" id="panel">
+    <div class="src-row">
+      <video id="srcPreview" muted playsinline loop></video>
+      <div class="meta">
+        <div class="fname" id="srcName"></div>
+        <dl>
+          <dt>長さ</dt><dd id="mDur">—</dd>
+          <dt>解像度</dt><dd id="mRes">—</dd>
+          <dt>推定フレーム</dt><dd id="mFrames">—</dd>
+        </dl>
+        <div class="warn" id="durWarn" style="margin-top:8px; display:none; font-family:var(--mono); font-size:12px;"></div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>ループの作り方</label>
+      <div class="seg" id="modeSeg">
+        <button data-mode="boomerang" class="on">順 → 逆（ブーメラン）</button>
+        <button data-mode="reverse">逆再生のみ</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>フレームレート（落とすほど軽く・粗く）</label>
+      <div class="seg" id="fpsSeg">
+        <button data-fps="original" class="on">元のまま</button>
+        <button data-fps="24">24</button>
+        <button data-fps="20">20</button>
+        <button data-fps="15">15</button>
+        <button data-fps="12">12</button>
+        <button data-fps="10">10</button>
+        <button data-fps="8">8</button>
+      </div>
+    </div>
+
+    <div class="toggle-row" id="seamRow">
+      <input type="checkbox" id="dropSeam" checked>
+      <label for="dropSeam">つなぎ目の重複フレームを除去<span class="hint"> — 折り返しのカクつきを防ぐ</span></label>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="generate">ループを生成</button>
+      <button class="btn-ghost" id="reset">別の動画</button>
+      <span class="engine"><span class="dot" id="engDot"></span><span id="engTxt">エンジン未起動</span></span>
+    </div>
+
+    <div class="progress hidden" id="progress">
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="label" id="progLabel">準備中…</div>
+    </div>
+  </div>
+
+  <!-- result -->
+  <div class="result hidden" id="result">
+    <video id="outPreview" autoplay loop muted playsinline></video>
+    <div class="rmeta">
+      <span id="outInfo">—</span>
+      <span id="outSize">—</span>
+    </div>
+    <a class="dl" id="download" download="reverse-loop.mp4">↓ ダウンロード</a>
+  </div>
+
+  <!-- error -->
+  <div class="error hidden" id="error"></div>
+
+  <footer>
+    処理はすべて端末上で完結します。<br>
+    エンジン（ffmpeg.wasm 約30MB）の読み込みに失敗する場合は、このファイルを保存してローカルのWebサーバー経由で開いてください。
+  </footer>
+</div>
+
+<script type="module">
+import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
+import { fetchFile } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
+
+const $ = (id) => document.getElementById(id);
+const ffmpeg = new FFmpeg();
+
+let engineReady = false, engineLoading = false;
+let currentFile = null, srcURL = null, resultURL = null;
+let processing = false;
+let state = { mode: 'boomerang', fps: 'original', dropSeam: true };
+let srcMeta = { dur: 0, w: 0, h: 0, fps: 30 };
+
+/* ---------- engine ---------- */
+function setEngine(status, msg) {
+  const dot = $('engDot'), txt = $('engTxt');
+  dot.className = 'dot ' + (status === 'ready' ? 'ready' : status === 'loading' ? 'loading' : status === 'err' ? 'err' : '');
+  txt.textContent = msg || (status === 'ready' ? 'エンジン準備完了' : status === 'loading' ? 'エンジン読込中…' : status === 'err' ? '読込失敗' : 'エンジン未起動');
+}
+
+async function loadEngine() {
+  if (engineReady || engineLoading) return;
+  engineLoading = true;
+  setEngine('loading');
+  try {
+    const FF = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm';
+    const CORE = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
+    // 別ドメインのWorkerは直接生成できないので、同一オリジンのBlobで包んで読み込む
+    const classWorkerURL = URL.createObjectURL(new Blob(
+      [`import "${FF}/worker.js";`], { type: 'text/javascript' }
+    ));
+    await ffmpeg.load({
+      classWorkerURL,
+      coreURL: `${CORE}/ffmpeg-core.js`,
+      wasmURL: `${CORE}/ffmpeg-core.wasm`,
+    });
+    engineReady = true;
+    setEngine('ready');
+  } catch (e) {
+    setEngine('err');
+    showError('エンジンの読み込みに失敗しました。ネットワーク接続を確認するか、このファイルを保存してローカルサーバー経由で開いてください。', e);
+  } finally {
+    engineLoading = false;
+  }
+}
+
+ffmpeg.on('progress', ({ progress }) => {
+  if (!processing) return;
+  const pct = Math.max(0, Math.min(100, Math.round(progress * 100)));
+  $('barFill').style.width = pct + '%';
+  $('progLabel').textContent = `生成中… ${pct}%`;
+});
+
+/* ---------- file handling ---------- */
+const dz = $('dropzone'), fileInput = $('fileInput');
+
+dz.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+['dragenter', 'dragover'].forEach(ev =>
+  dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev =>
+  dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('drag'); }));
+dz.addEventListener('drop', (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+function handleFile(file) {
+  if (!file.type.startsWith('video/')) {
+    showError('動画ファイルを選んでください。', null);
+    return;
+  }
+  hideError();
+  currentFile = file;
+  if (srcURL) URL.revokeObjectURL(srcURL);
+  srcURL = URL.createObjectURL(file);
+
+  const v = $('srcPreview');
+  v.src = srcURL;
+  v.onloadedmetadata = () => {
+    srcMeta.dur = v.duration || 0;
+    srcMeta.w = v.videoWidth; srcMeta.h = v.videoHeight;
+    $('mDur').textContent = srcMeta.dur ? srcMeta.dur.toFixed(2) + ' 秒' : '不明';
+    $('mRes').textContent = (v.videoWidth && v.videoHeight) ? `${v.videoWidth} × ${v.videoHeight}` : '不明';
+    updateFrameEstimate();
+    const warn = $('durWarn');
+    if (srcMeta.dur > 6) {
+      warn.style.display = 'block';
+      warn.textContent = `⚠ ${srcMeta.dur.toFixed(1)}秒あります。長い動画はメモリ不足になりやすいので、フレームレートを下げるのがおすすめです。`;
+    } else { warn.style.display = 'none'; }
+    v.play().catch(() => {});
+  };
+
+  $('srcName').textContent = file.name;
+  dz.classList.add('hidden');
+  $('panel').classList.remove('hidden');
+  $('result').classList.add('hidden');
+  loadEngine(); // 先読みしておく
+}
+
+function updateFrameEstimate() {
+  const fps = state.fps === 'original' ? srcMeta.fps : Number(state.fps);
+  const half = Math.max(1, Math.round(srcMeta.dur * fps));
+  const total = state.mode === 'boomerang' ? half * 2 - (state.dropSeam ? 1 : 0) : half;
+  const fpsNote = state.fps === 'original' ? '元fps想定' : state.fps + 'fps';
+  $('mFrames').textContent = srcMeta.dur ? `約 ${total} 枚（${fpsNote}）` : '—';
+}
+
+/* ---------- segmented controls ---------- */
+$('modeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.mode = b.dataset.mode;
+  [...$('modeSeg').children].forEach(x => x.classList.toggle('on', x === b));
+  $('seamRow').style.display = state.mode === 'boomerang' ? 'flex' : 'none';
+  updateFrameEstimate();
+});
+$('fpsSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.fps = b.dataset.fps;
+  [...$('fpsSeg').children].forEach(x => x.classList.toggle('on', x === b));
+  updateFrameEstimate();
+});
+$('dropSeam').addEventListener('change', (e) => { state.dropSeam = e.target.checked; updateFrameEstimate(); });
+
+/* ---------- generate ---------- */
+function buildFilter() {
+  const fpsExpr = state.fps === 'original' ? '' : `fps=${state.fps},`;
+  if (state.mode === 'reverse') {
+    return `[0:v]${fpsExpr}reverse[out]`;
+  }
+  // boomerang: forward + reverse
+  const seam = state.dropSeam ? ',trim=start_frame=1,setpts=PTS-STARTPTS' : '';
+  return `[0:v]${fpsExpr}split[a][b];[b]reverse${seam}[r];[a][r]concat=n=2:v=1[out]`;
+}
+
+$('generate').addEventListener('click', async () => {
+  if (processing || !currentFile) return;
+  hideError();
+  if (!engineReady) { await loadEngine(); if (!engineReady) return; }
+
+  processing = true;
+  $('generate').disabled = true;
+  $('progress').classList.remove('hidden');
+  $('barFill').style.width = '0%';
+  $('progLabel').textContent = '入力を読み込み中…';
+  $('result').classList.add('hidden');
+
+  const ext = (currentFile.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4';
+  const inName = 'input.' + ext;
+  const outName = 'output.mp4';
+
+  try {
+    await ffmpeg.writeFile(inName, await fetchFile(currentFile));
+    $('progLabel').textContent = '生成中… 0%';
+
+    await ffmpeg.exec([
+      '-i', inName,
+      '-an',
+      '-filter_complex', buildFilter(),
+      '-map', '[out]',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-crf', '20',
+      '-preset', 'veryfast',
+      '-movflags', '+faststart',
+      outName,
+    ]);
+
+    const data = await ffmpeg.readFile(outName);
+    if (resultURL) URL.revokeObjectURL(resultURL);
+    const blob = new Blob([data.buffer], { type: 'video/mp4' });
+    resultURL = URL.createObjectURL(blob);
+
+    $('outPreview').src = resultURL;
+    $('download').href = resultURL;
+    const baseName = currentFile.name.replace(/\.[^.]+$/, '');
+    $('download').download = `${baseName}_${state.mode === 'boomerang' ? 'loop' : 'reverse'}.mp4`;
+    $('outSize').textContent = (blob.size / 1024 / 1024).toFixed(2) + ' MB';
+    $('outInfo').textContent = state.mode === 'boomerang' ? '順再生 → 逆再生 ループ' : '逆再生';
+    $('result').classList.remove('hidden');
+    $('progLabel').textContent = '完了';
+    $('barFill').style.width = '100%';
+
+    // cleanup fs
+    try { await ffmpeg.deleteFile(inName); await ffmpeg.deleteFile(outName); } catch {}
+  } catch (e) {
+    showError('生成中にエラーが発生しました。動画が長すぎる/解像度が高すぎる場合はフレームレートを下げて再試行してください。', e);
+  } finally {
+    processing = false;
+    $('generate').disabled = false;
+    setTimeout(() => $('progress').classList.add('hidden'), 800);
+  }
+});
+
+/* ---------- reset ---------- */
+$('reset').addEventListener('click', () => {
+  currentFile = null;
+  if (srcURL) { URL.revokeObjectURL(srcURL); srcURL = null; }
+  $('srcPreview').removeAttribute('src');
+  fileInput.value = '';
+  $('panel').classList.add('hidden');
+  $('result').classList.add('hidden');
+  dz.classList.remove('hidden');
+  hideError();
+});
+
+/* ---------- error ---------- */
+function showError(msg, e) {
+  const el = $('error');
+  el.innerHTML = `<b>うまくいきませんでした</b><br>${msg}` + (e ? `<br><code>${String(e.message || e).slice(0, 200)}</code>` : '');
+  el.classList.remove('hidden');
+}
+function hideError() { $('error').classList.add('hidden'); }
+</script>
+</body>
+</html>

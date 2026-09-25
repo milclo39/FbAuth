@@ -3,6 +3,7 @@ var ASSETS = [
 	'/',
 	'/index.html',
 	'/main.html',
+	'/mplayer.html',
 ];
 
 // インストール処理

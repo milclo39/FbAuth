@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ETO LINK 2248</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="game-shell">
+    <header class="topbar">
+      <div class="brand"><span>ETO</span> LINK <b>2248</b></div>
+      <div class="top-actions">
+        <button id="help" class="icon-button" aria-label="遊び方を見る">?</button>
+        <button id="mute" class="icon-button" aria-label="音楽をミュート">♫</button>
+        <button id="restart" class="icon-button" aria-label="最初から遊ぶ">↻</button>
+      </div>
+    </header>
+
+    <section class="status" aria-label="ゲーム情報">
+      <div class="stat-card score-card"><div class="score-main"><span>スコア</span><strong id="score">0</strong></div><div id="preview" class="preview" hidden aria-live="polite"></div></div>
+      <div class="stat-card stage-card"><span>最高パネル</span><strong id="highest">32</strong><small id="lap">1周目・巳</small></div>
+    </section>
+
+    <div class="hint" id="hint">同じ干支を2枚以上なぞってつなごう</div>
+    <section id="board-wrap" class="board-wrap" aria-label="ゲーム盤面">
+      <div id="board" class="board"></div>
+      <svg id="path-line" class="path-line" aria-hidden="true"></svg>
+      <div id="animation-layer" class="animation-layer" aria-hidden="true"></div>
+      <div id="game-over" class="game-over" hidden>
+        <p>つなげる組が<br>なくなりました</p>
+        <strong id="final-score">0</strong><span> SCORE</span>
+        <button id="play-again">もう一度あそぶ</button>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button id="swap" class="tool-button" aria-pressed="false">
+        <span class="tool-icon">⇄</span>
+        <span><b>位置交換</b><small id="swap-count">あと 1 回</small></span>
+      </button>
+      <p>同じパネルを2枚つなぐと、同じ段階か<br>1段階上を順番につなげられます。</p>
+    </section>
+
+    <section class="legend" aria-label="干支の対応表">
+      <span>十二支は2048の次に子へ戻ります</span>
+      <div id="legend-items"></div>
+    </section>
+
+    <audio id="bgm" src="eto.mp3" loop preload="auto"></audio>
+
+    <section id="help-popup" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <div class="modal-card tutorial-card">
+        <button class="modal-close" data-close="help-popup" aria-label="閉じる">×</button>
+        <h2 id="help-title">How to Play <span>遊び方</span></h2>
+        <div class="tutorial-list">
+          <article><h3>同じパネルをつなげよう！</h3><div class="equation"><span class="mini-tile" data-exp="0"></span><b>＋</b><span class="mini-tile" data-exp="0"></span><b>→</b><span class="mini-tile" data-exp="1"></span></div></article>
+          <article><h3>同じパネルのあと、1段階上にもつながるよ！</h3><div class="equation"><span class="mini-tile" data-exp="0"></span><b>＋</b><span class="mini-tile" data-exp="0"></span><b>＋</b><span class="mini-tile" data-exp="1"></span><b>→</b><span class="mini-tile" data-exp="2"></span></div></article>
+          <article><h3>合計が次の段階を超えると、さらに段階アップ！</h3><div class="equation"><span class="mini-tile" data-exp="0"></span><b>＋</b><span class="mini-tile" data-exp="0"></span><b>＋</b><span class="mini-tile" data-exp="0"></span><b>＋</b><span class="mini-tile" data-exp="1"></span><b>→</b><span class="mini-tile" data-exp="3"></span></div></article>
+          <article><h3>亥（2048）の次は、子（1）につながるよ！</h3><div class="equation"><span class="mini-tile" data-exp="11"></span><b>＋</b><span class="mini-tile" data-exp="11"></span><b>→</b><span class="mini-tile" data-exp="12"></span></div></article>
+          <article><h3>斜めにもつなげられるよ。たくさんつないで高得点をねらおう！</h3><p>指やマウスで、となり合うパネルをなぞってね。</p></article>
+          <article><h3>ネコはつなげない特別パネル</h3><p>2周目から現れ、となりのパネルが消えると一緒に消えます。＋や＋＋のネコは、近くでパネルが消えると耐久が1つ減ります。盤面の種類が広がるとネコは一掃されます。</p></article>
+        </div>
+        <button class="modal-primary" data-close="help-popup">わかった！</button>
+      </div>
+    </section>
+
+    <section id="record-popup" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="record-title">
+      <div class="modal-card record-card">
+        <div class="record-sparkle" aria-hidden="true">✦ ✧ ✦</div>
+        <h2 id="record-title">新しい最高段階！</h2>
+        <div id="record-created" class="record-created"></div>
+        <div id="record-removed" class="record-removed"></div>
+        <button id="record-continue" class="modal-primary">つづける</button>
+      </div>
+    </section>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>

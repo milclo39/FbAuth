@@ -1,6 +1,7 @@
 (() => {
   const COLS = 5, ROWS = 8, SIZE = COLS * ROWS;
   const CAT_SPAWN_CHANCE = 0.06;
+  const SAVE_KEY = 'eto-link-game-v1';
   const animals = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
   const hues = [345, 28, 48, 76, 145, 188, 215, 255, 280, 315, 8, 110];
   const board = document.querySelector('#board');
@@ -28,6 +29,38 @@
   function randomPanel() {
     if (maxReached >= 12 && Math.random() < CAT_SPAWN_CHANCE) return catForCurrentLap();
     return randomExp();
+  }
+
+  function saveGame() {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 1, cells, score, maxReached, swaps }));
+    } catch {
+      // 保存が許可されていない環境でもゲーム自体は続けられる。
+      setHint('保存できません。ブラウザの保存設定をご確認ください');
+    }
+  }
+  function loadGame() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
+      if (!saved || saved.version !== 1 || !Array.isArray(saved.cells) || saved.cells.length !== SIZE ||
+          !Number.isSafeInteger(saved.maxReached) || saved.maxReached < 5 ||
+          !Number.isSafeInteger(saved.score) || saved.score < 0 ||
+          ![0, 1].includes(saved.swaps)) return false;
+      const min = Math.max(0, saved.maxReached - 9);
+      if (!saved.cells.every(cell => Number.isSafeInteger(cell) ? cell >= min && cell <= saved.maxReached :
+        isCat(cell) && Number.isInteger(cell.armor) && cell.armor >= 0 && cell.armor <= 2)) return false;
+      cells = saved.cells;
+      score = saved.score;
+      maxReached = saved.maxReached;
+      swaps = saved.swaps;
+      selected = []; dragging = false; swapMode = false; swapFirst = null; ended = false; animating = false;
+      gameOver.hidden = true;
+      render(); updateStatus(); setHint('前回のつづきから再開しました');
+      checkGameOver();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function updateMuteButton() {
@@ -64,7 +97,7 @@
     score = 0; maxReached = 5; swaps = 1; selected = []; dragging = false; swapMode = false; swapFirst = null; ended = false; animating = false;
     do { cells = Array.from({length: SIZE}, randomExp); } while (!hasConnectablePair());
     gameOver.hidden = true;
-    render(); updateStatus(); setHint('同じ干支を2枚以上なぞってつなごう');
+    render(); updateStatus(); setHint('同じ干支を2枚以上なぞってつなごう'); saveGame();
   }
   function render() {
     board.innerHTML = cells.map((cell, i) => {
@@ -271,6 +304,7 @@
     score += (result + 1) * path.length * 10;
     if (madeNewMaximum) swaps = 1;
     const movements = settleBoard(path, previousWindowLower);
+    saveGame();
     selected=[]; render(); updateStatus();
     setHint(`${path.length}枚を合体！ ${formatValue(result)}・${animals[result % 12]}ができました`);
     if (!await playFallAnimation(movements, previousRects, serial) || serial !== animationSerial) return;
@@ -319,6 +353,7 @@
     if (swapFirst === null) { swapFirst=idx; render(); setHint('入れ替えるもう1枚を選んでください'); return; }
     if (swapFirst === idx) { swapFirst=null; render(); return; }
     [cells[swapFirst],cells[idx]]=[cells[idx],cells[swapFirst]]; swaps=0; swapMode=false; swapFirst=null; render(); updateStatus(); setHint('位置を入れ替えました');
+    saveGame();
     window.setTimeout(checkGameOver, 120);
   }
   boardWrap.addEventListener('pointerdown', e => { if(ended || animating) return; const idx=tileAtPoint(e.clientX,e.clientY); if(idx===null)return; if(swapMode) useSwap(idx); else if(!isCat(cells[idx])) { boardWrap.setPointerCapture(e.pointerId); startDrag(idx); } e.preventDefault(); });
@@ -334,5 +369,5 @@
     const exp = Number(tile.dataset.exp);
     tile.innerHTML = `<img src="eto/${exp % 12 + 1}.png" alt="${animals[exp % 12]}"><span>${formatValue(exp)}</span>${lap(exp) > 1 ? `<i class="lap-badge">${lap(exp)}周</i>` : ''}`;
   });
-  init();
+  if (!loadGame()) init();
 })();

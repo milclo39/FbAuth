@@ -17,35 +17,44 @@
       </div>
     </header>
 
-    <section class="status" aria-label="ゲーム情報">
-      <div class="stat-card score-card"><div class="score-main"><span>スコア</span><strong id="score">0</strong></div><div id="preview" class="preview" hidden aria-live="polite"></div></div>
-      <div class="stat-card stage-card"><span>最高パネル</span><strong id="highest">32</strong><small id="lap">1周目・巳</small></div>
-    </section>
-
     <div class="hint" id="hint">同じ干支を2枚以上なぞってつなごう</div>
-    <section id="board-wrap" class="board-wrap" aria-label="ゲーム盤面">
-      <div id="board" class="board"></div>
-      <svg id="path-line" class="path-line" aria-hidden="true"></svg>
-      <div id="animation-layer" class="animation-layer" aria-hidden="true"></div>
-      <div id="game-over" class="game-over" hidden>
-        <p>つなげる組が<br>なくなりました</p>
-        <strong id="final-score">0</strong><span> SCORE</span>
-        <button id="play-again">もう一度あそぶ</button>
+    <div class="game-layout">
+      <section id="board-wrap" class="board-wrap" aria-label="ゲーム盤面">
+        <div id="board" class="board"></div>
+        <svg id="path-line" class="path-line" aria-hidden="true"></svg>
+        <div id="animation-layer" class="animation-layer" aria-hidden="true"></div>
+        <div id="game-over" class="game-over" hidden>
+          <p>つなげる組が<br>なくなりました</p>
+          <strong id="final-score">0</strong><span> SCORE</span>
+          <button id="play-again">もう一度あそぶ</button>
+        </div>
+      </section>
+
+      <div class="game-sidebar">
+        <section class="status" aria-label="ゲーム情報">
+          <div class="stat-card score-card">
+            <div class="score-main"><span>スコア</span><strong id="score">0</strong></div>
+            <div id="preview" class="preview" hidden aria-live="polite"></div>
+          </div>
+          <div class="stat-card stage-card">
+            <span>最高パネル</span><strong id="highest">32</strong><small id="lap">1周目・巳</small>
+          </div>
+        </section>
+
+        <section class="controls">
+          <button id="swap" class="tool-button" aria-pressed="false">
+            <span class="tool-icon">⇄</span>
+            <span><b>位置交換</b><small id="swap-count">あと 1 回</small></span>
+          </button>
+          <p>同じパネルを2枚つなぐと、同じ段階か1段階上を順番につなげられます。</p>
+        </section>
+
+        <section class="legend" aria-label="干支の対応表">
+          <span>十二支は2048の次に子へ戻ります</span>
+          <div id="legend-items" class="legend-items"></div>
+        </section>
       </div>
-    </section>
-
-    <section class="controls">
-      <button id="swap" class="tool-button" aria-pressed="false">
-        <span class="tool-icon">⇄</span>
-        <span><b>位置交換</b><small id="swap-count">あと 1 回</small></span>
-      </button>
-      <p>同じパネルを2枚つなぐと、同じ段階か<br>1段階上を順番につなげられます。</p>
-    </section>
-
-    <section class="legend" aria-label="干支の対応表">
-      <span>十二支は2048の次に子へ戻ります</span>
-      <div id="legend-items"></div>
-    </section>
+    </div>
 
     <audio id="bgm" src="eto.mp3" loop preload="auto"></audio>
 

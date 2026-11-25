@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Webカメラ録画テストアプリ (RecordRTC / FFmpeg)</title>
+  <link rel="stylesheet" href="./style.css">
+
+  <!-- RecordRTC (WebM録画用) -->
+  <script src="https://cdn.jsdelivr.net/npm/recordrtc@5.6.2/RecordRTC.min.js"></script>
+
+  <!-- FFmpeg.wasm v0.12 (MP4変換用) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "@ffmpeg/ffmpeg": "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js",
+        "@ffmpeg/util": "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="title-group">
+        <h1>Webカメラ録画テストアプリ</h1>
+        <p class="subtitle">RecordRTC (WebM) / RecordRTC + FFmpeg (MP4) ・ 音声あり/なし 切り替え検証用</p>
+      </div>
+      <div class="header-status">
+        <span id="statusBadge" class="status-badge status-idle">待機中</span>
+      </div>
+    </header>
+
+    <div id="protocolWarning" class="alert-banner hidden">
+      <strong>ローカルファイル (file://) で開かれています:</strong>
+      カメラ権限や FFmpeg.wasm (ES Modules / Web Worker) を正常に動作させるため、同梱の
+      <code>start_server.bat</code> または <code>python server.py</code> を起動し、
+      <code>http://localhost:8080</code> からアクセスしてください。
+    </div>
+
+    <main class="main-grid">
+      <!-- 左カラム: ライブプレビュー -->
+      <section class="card preview-card">
+        <div class="card-header">
+          <h2>ライブプレビュー</h2>
+          <div class="preview-badges">
+            <span id="modeBadge" class="pill">RecordRTCのみ (WebM)</span>
+            <span id="audioBadge" class="pill pill-accent">音声あり</span>
+          </div>
+        </div>
+
+        <div class="video-stage">
+          <video id="previewVideo" autoplay muted playsinline></video>
+          <div id="previewPlaceholder" class="video-placeholder">
+            <span>カメラが停止しています。「カメラ開始」を押してください。</span>
+          </div>
+          <div id="recOverlay" class="rec-overlay hidden">
+            <span class="rec-dot"></span>
+            <span class="rec-label">REC</span>
+            <span id="recTimer" class="rec-timer">00:00</span>
+          </div>
+        </div>
+
+        <div class="audio-meter-row">
+          <span class="meter-label">マイク入力レベル</span>
+          <div class="meter-track">
+            <div id="audioMeterFill" class="meter-fill"></div>
+          </div>
+          <span id="audioMeterText" class="meter-text">無効</span>
+        </div>
+
+        <div class="control-bar">
+          <div class="btn-group">
+            <button id="toggleCameraBtn" class="btn btn-secondary" type="button">カメラ開始</button>
+            <button id="startRecordBtn" class="btn btn-primary" type="button" disabled>録画開始</button>
+            <button id="stopRecordBtn" class="btn btn-danger" type="button" disabled>録画停止</button>
+          </div>
+          <label class="checkbox-inline" title="プレビュー表示のみ左右反転します（録画映像は反転しません）">
+            <input id="mirrorToggle" type="checkbox" checked>
+            <span>ミラー表示 (プレビューのみ)</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- 右カラム: 試験設定 + 録画結果 -->
+      <div class="side-column">
+        <section class="card settings-card">
+          <div class="card-header">
+            <h2>試験設定</h2>
+          </div>
+
+          <div class="form-group">
+            <label class="group-label">録画方式の切り替え</label>
+            <div class="segmented-control">
+              <label class="segment-option">
+                <input type="radio" name="recordMode" value="webm" checked>
+                <span class="segment-box">
+                  <strong>RecordRTCのみ</strong>
+                  <small>WebM出力 (高速・変換なし)</small>
+                </span>
+              </label>
+              <label class="segment-option">
+                <input type="radio" name="recordMode" value="mp4">
+                <span class="segment-box">
+                  <strong>FFmpeg併用</strong>
+                  <small>MP4出力 (H.264 / AAC変換)</small>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="group-label">音声の切り替え</label>
+            <div class="segmented-control">
+              <label class="segment-option">
+                <input type="radio" name="audioEnabled" value="on" checked>
+                <span class="segment-box">
+                  <strong>音声あり</strong>
+                  <small>マイク音声を含めて録画</small>
+                </span>
+              </label>
+              <label class="segment-option">
+                <input type="radio" name="audioEnabled" value="off">
+                <span class="segment-box">
+                  <strong>音声なし</strong>
+                  <small>映像のみで録画</small>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="device-grid">
+            <div class="form-group">
+              <label for="videoSource" class="group-label">カメラデバイス</label>
+              <select id="videoSource" class="select-input"></select>
+            </div>
+            <div class="form-group">
+              <label for="audioSource" class="group-label">マイクデバイス</label>
+              <select id="audioSource" class="select-input"></select>
+            </div>
+            <div class="form-group">
+              <label for="resolutionSelect" class="group-label">解像度プリセット</label>
+              <select id="resolutionSelect" class="select-input">
+                <option value="default">自動 (カメラ既定値)</option>
+                <option value="640x480">640 x 480 (VGA)</option>
+                <option value="1280x720" selected>1280 x 720 (HD)</option>
+                <option value="1920x1080">1920 x 1080 (Full HD)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="ffmpeg-bar">
+            <div class="ffmpeg-info">
+              <span class="group-label">FFmpeg.wasm 状態:</span>
+              <span id="ffmpegStatusText" class="ffmpeg-status">未読込 (MP4録画時に自動読込)</span>
+            </div>
+            <button id="preloadFfmpegBtn" class="btn btn-outline btn-sm" type="button">FFmpeg事前読込</button>
+          </div>
+        </section>
+
+        <section class="card playback-card">
+          <div class="card-header">
+            <h2>録画結果・再生確認</h2>
+            <button id="downloadBtn" class="btn btn-primary btn-sm" type="button" disabled>ダウンロード</button>
+          </div>
+
+          <div id="conversionBox" class="conversion-box hidden">
+            <div class="conversion-header">
+              <span id="conversionMessage">FFmpegでMP4に変換中...</span>
+              <span id="conversionPercent">0%</span>
+            </div>
+            <div class="progress-track">
+              <div id="conversionProgressBar" class="progress-bar"></div>
+            </div>
+          </div>
+
+          <div class="playback-stage">
+            <video id="playbackVideo" controls playsinline></video>
+            <div id="playbackPlaceholder" class="video-placeholder">
+              <span>録画を停止するとここに再生プレビューが表示されます。</span>
+            </div>
+          </div>
+
+          <dl class="meta-grid">
+            <div class="meta-item">
+              <dt>形式</dt>
+              <dd id="metaFormat">-</dd>
+            </div>
+            <div class="meta-item">
+              <dt>音声</dt>
+              <dd id="metaAudio">-</dd>
+            </div>
+            <div class="meta-item">
+              <dt>ファイルサイズ</dt>
+              <dd id="metaSize">-</dd>
+            </div>
+            <div class="meta-item">
+              <dt>録画時間</dt>
+              <dd id="metaDuration">-</dd>
+            </div>
+            <div class="meta-item">
+              <dt>FFmpeg変換時間</dt>
+              <dd id="metaConvertTime">-</dd>
+            </div>
+            <div class="meta-item">
+              <dt>MIME Type</dt>
+              <dd id="metaMime">-</dd>
+            </div>
+          </dl>
+
+          <div class="history-section">
+            <div class="history-header">
+              <h3>試験録画履歴 (セッション内)</h3>
+              <button id="clearHistoryBtn" class="btn btn-outline btn-xs" type="button" disabled>履歴クリア</button>
+            </div>
+            <ul id="historyList" class="history-list">
+              <li class="history-empty">まだ録画はありません。</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <section class="card log-card">
+      <div class="card-header">
+        <h2>診断ログ</h2>
+        <button id="clearLogBtn" class="btn btn-outline btn-xs" type="button">ログクリア</button>
+      </div>
+      <pre id="logOutput" class="log-output"></pre>
+    </section>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
